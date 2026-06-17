@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>企業縁占 — ENISHI ORACLE</title>
+<meta name="description" content="占術15種 × 現実キャリアで、企業との相性を鑑定する" />
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#0b0918" />
+<link rel="icon" href="./icons/favicon-64.png" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="企業縁占" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:wght@500;600&family=Shippori+Mincho+B1:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg0:#0b0918; --bg1:#15102e; --panel:rgba(23,17,48,.66); --panel2:rgba(35,27,72,.7);
+    --line:rgba(201,160,90,.30); --line2:rgba(201,160,90,.16);
+    --gold:#e7c574; --gold2:#c79a4a; --goldDim:#9c7327;
+    --verm:#c8462f; --verm2:#e0573e; --text:#f1ecf7; --sub:#a79ec6; --star:#f3d98b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(130% 90% at 50% -12%, var(--bg1), var(--bg0) 68%) fixed;
+    color:var(--text); font-family:'Zen Kaku Gothic New',sans-serif;
+    -webkit-font-smoothing:antialiased; min-height:100vh;
+    padding:max(22px,env(safe-area-inset-top)) 16px calc(64px + env(safe-area-inset-bottom));
+  }
+  /* film grain */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap{max-width:560px; margin:0 auto; position:relative; z-index:1}
+  /* kintsugi top line */
+  .topline{height:1px;background:linear-gradient(90deg,transparent,var(--gold2),transparent);margin-bottom:20px;opacity:.6}
+  header{text-align:center; margin-bottom:22px; position:relative}
+  .eyebrow{font-family:'Cormorant',serif; font-size:13px; letter-spacing:.52em; color:var(--gold); margin-bottom:6px; padding-left:.52em}
+  h1{font-family:'Shippori Mincho B1',serif; font-size:32px; font-weight:800; margin:0; letter-spacing:.16em;
+     background:linear-gradient(180deg,#fff7ec,var(--gold) 55%,var(--gold2)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .tag-sub{font-size:12.5px; color:var(--sub); margin-top:9px; letter-spacing:.02em}
+  .star{position:absolute; color:var(--star); font-size:11px; animation:flt 4.5s ease-in-out infinite}
+  @keyframes flt{0%,100%{transform:translateY(0);opacity:.45}50%{transform:translateY(-6px);opacity:1}}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 18px 40px rgba(0,0,0,.35); margin-bottom:16px}
+  label.lbl{font-size:12px;color:var(--sub);letter-spacing:.06em;margin-bottom:5px;display:block}
+  input,select{width:100%; background:#120d28; border:1px solid var(--line2); border-radius:11px; color:var(--text);
+    padding:12px; font-size:15px; outline:none; font-family:inherit}
+  input:focus,select:focus{border-color:var(--gold2)}
+  .row{display:flex; gap:10px}
+  .btn-gold{width:100%; padding:15px; border-radius:12px; border:1px solid var(--gold); cursor:pointer;
+    background:linear-gradient(180deg,#f6e2a4,var(--gold) 40%,var(--gold2)); color:#1a1330;
+    font-family:'Shippori Mincho B1',serif; font-weight:800; font-size:17px; letter-spacing:.28em;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 10px 24px rgba(0,0,0,.4); transition:transform .08s}
+  .btn-gold:active{transform:translateY(1px)}
+  .btn-ghost{width:100%; padding:13px; border-radius:11px; cursor:pointer; background:transparent;
+    border:1px solid var(--line); color:var(--text); font-size:14px; font-family:inherit}
+  .note{font-size:11px; color:var(--sub); line-height:1.7; margin-top:10px}
+  .err{color:var(--verm2); font-size:13px; margin-bottom:10px}
+  details.cfg{margin-bottom:16px; border:1px solid var(--line2); border-radius:12px; background:rgba(18,13,40,.5)}
+  details.cfg summary{cursor:pointer; padding:12px 14px; font-size:13px; color:var(--gold); list-style:none}
+  details.cfg summary::-webkit-details-marker{display:none}
+  details.cfg .body{padding:0 14px 14px}
+  /* seal */
+  .seals{display:flex;justify-content:center;gap:34px;margin-top:24px}
+  .seal-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .seal{border-radius:50%; position:relative; display:grid; place-items:center;
+    background:radial-gradient(circle at 38% 30%, var(--verm2), var(--verm) 60%, #8f2e1d 100%);
+    filter:saturate(1.05); animation:stamp .75s cubic-bezier(.2,.8,.2,1) both}
+  .seal.hot{animation:stamp .75s cubic-bezier(.2,.8,.2,1) both, glow 2.6s ease-in-out 1s infinite}
+  @keyframes stamp{0%{transform:scale(1.7) rotate(-8deg);opacity:0}55%{transform:scale(.92) rotate(3deg);opacity:1}75%{transform:scale(1.04) rotate(-1.5deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 4px rgba(231,197,116,.16),0 10px 30px rgba(0,0,0,.5)}50%{box-shadow:0 0 0 4px rgba(231,197,116,.4),0 0 42px rgba(231,197,116,.5)}}
+  .seal .ring{position:absolute;inset:7px;border-radius:50%;border:1px solid rgba(255,225,210,.4)}
+  .seal .k{font-family:'Shippori Mincho B1',serif;color:#fff5ef;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+  .seal .n{font-family:'Shippori Mincho B1',serif;color:#fff;font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.4)}
+  .seal .d{color:rgba(255,235,225,.8)}
+  .seal .fx{position:absolute;color:var(--star)}
+  .seal-lab{font-size:13px;color:var(--sub);letter-spacing:.08em}
+  .sec-title{font-family:'Shippori Mincho B1',serif;color:var(--gold);font-size:15px;margin-bottom:6px}
+  .hr{height:1px;background:var(--line2);margin:0}
+  .scrow{padding:10px 0;border-bottom:1px solid var(--line2)}
+  .scrow:last-child{border-bottom:none}
+  .scrow .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .scrow .nm{font-size:14px;color:var(--text);font-weight:500}
+  .scrow .sc{font-family:'Shippori Mincho B1',serif;font-size:16px;font-weight:700}
+  .track{height:5px;background:#120d28;border-radius:4px;margin:6px 0;overflow:hidden}
+  .fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--goldDim),var(--gold));animation:bar .9s ease-out both}
+  @keyframes bar{from{width:0 !important}}
+  .cmt{font-size:12.5px;color:var(--sub);line-height:1.55}
+  .chip{font-size:11.5px;color:var(--gold);border:1px solid var(--goldDim);border-radius:999px;padding:3px 10px;background:rgba(231,197,116,.08);display:inline-block;margin:0 6px 6px 0}
+  .adv{border-radius:14px;padding:18px;margin-bottom:18px;border:1px solid var(--line)}
+  .adv.hot{background:linear-gradient(180deg,#2a2148,rgba(23,17,48,.66));border-color:var(--gold);box-shadow:0 0 32px rgba(231,197,116,.16)}
+  .spinner{width:46px;height:46px;margin:0 auto;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--gold);animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hist{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+  .hist::-webkit-scrollbar{height:6px}.hist::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+  .hcard{flex:0 0 auto;min-width:132px;text-align:left;cursor:pointer;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;color:var(--text);font-family:inherit}
+  a.src{color:var(--gold);margin-right:10px;font-size:11px;word-break:break-all}
+  footer{text-align:center;margin-top:28px;font-size:10.5px;color:var(--sub);line-height:1.7}
+  @media (prefers-reduced-motion:reduce){*{animation:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topline"></div>
+  <header>
+    <span class="star" style="left:20%;top:-2px">✦</span>
+    <span class="star" style="right:22%;top:12px;animation-delay:.8s;color:var(--gold)">✦</span>
+    <div class="eyebrow">ENISHI ORACLE</div>
+    <h1>企業縁占</h1>
+    <div class="tag-sub">占術15種 × 現実キャリアで、会社との相性を鑑定する</div>
+  </header>
+  <main id="app"></main>
+  <footer>占術はエンタメとして、現実相性はあくまで判断材料としてご活用ください。<br>ENISHI ORACLE</footer>
+</div>
+
+<script>
+const METHODS = ["西洋占星術","タロットカード","数秘術","ルーン占い","東洋占星術","風水","四柱推命","紫微斗数","0学占い","姓名判断","九星気学","おみくじ","六曜占星術","算命学","血液型占い"];
+const LOADING = ["企業情報を調べています…","15種の占術で鑑定中…","現実的キャリア相性を算出中…","御朱印を捺しています…"];
+const PROFILE = `- Apple製品の販売 約8年・修理 約2年（現在は販売のみ）
+- 新卒で株式会社コスモネット入社、転職経験なし
+- 年収 約400万円／宮崎市在住／全国転勤の経験多数
+- 愛知学院大学 法学部 法律学科 卒
+- IT業界への転職を検討中（富士ソフトの書類選考通過歴あり）。副業（AI自動化）や独立も視野
+- 強み：対面販売スキル ＋ 技術実装力（PWA・GitHub Actions・API連携など個人開発の実績多数）`;
+
+const LS = {
+  get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},
+  set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},
+};
+const state = {
+  company:"", name:"大村晃平", date:"1993-04-14", time:"06:18", place:"神奈川県横浜市",
+  loading:false, error:"", result:null,
+  apikey: LS.get("enishi_apikey",""), model: LS.get("enishi_model","claude-sonnet-4-6"),
+  history: JSON.parse(LS.get("enishi_history","[]")),
+};
+const app = document.getElementById("app");
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function buildPrompt(){
+  return `企業と候補者の「相性」を鑑定してください。
+
+【企業名】${state.company}
+【候補者の生年月日時・出生地】${state.name} / ${state.date} ${state.time} / ${state.place}
+【候補者の経歴】
+${PROFILE}
+
+手順：
+1) まず web_search で「${state.company}」の企業情報（事業内容・業界・規模・将来性・評判）を調べる。検索できない場合は手持ちの知識で答え、company.summary にその旨を反映する。
+2) 占術相性(uranai_score)：次の15種を統合し0〜100で総合判定。各手法も0〜100で採点。手法：${METHODS.join("、")}
+3) 現実相性(genjitsu_score)：候補者の経歴がこの企業でどれだけ活きるか（業界成長性／スキル適合／年収アップ余地／キャリアパス／社風・安定性）を0〜100で判定。
+4) total_score：uranai_score×0.4 + genjitsu_score×0.6 を四捨五入。
+5) tenshoku_advice：この企業を受けるなら最適な転職活動の進め方。
+
+出力は次のJSONのみ。前置き・説明・コードフェンス・マークダウン禁止。日本語。
+{"company":{"name":"","industry":"","scale":"","summary":"2〜3文","highlights":["",""],"sources":["url"]},"uranai_score":0,"genjitsu_score":0,"total_score":0,"summary_comment":"総合所見を2〜3文","uranai_breakdown":[{"method":"西洋占星術","score":0,"comment":"短く"}],"genjitsu_breakdown":[{"factor":"業界成長性","score":0,"comment":"短く"}],"tenshoku_advice":{"verdict":"一言評価","steps":[{"title":"","detail":""}],"appeal":["",""],"timing":""}}
+uranai_breakdown は15手法すべてを必ず含めること。`;
+}
+function extractJSON(t){
+  t=t.replace(/```json/gi,"").replace(/```/g,"").trim();
+  const a=t.indexOf("{"), b=t.lastIndexOf("}");
+  if(a<0||b<0) throw new Error("parse");
+  return JSON.parse(t.slice(a,b+1));
+}
+async function rate(){
+  if(!state.apikey){ state.error="設定でAnthropic APIキーを入力してください"; render(); return; }
+  if(!state.company.trim()){ state.error="企業名を入力してください"; render(); return; }
+  if(!state.name.trim()||!state.date){ state.error="お名前と生年月日を入力してください"; render(); return; }
+  state.error=""; state.result=null; state.loading=true; render();
+  let i=0; const t=setInterval(()=>{ i=(i+1)%LOADING.length; const el=document.getElementById("lmsg"); if(el) el.textContent=LOADING[i]; },2600);
+  try{
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key":state.apikey,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true",
+      },
+      body:JSON.stringify({
+        model:state.model, max_tokens:4096,
+        messages:[{role:"user",content:buildPrompt()}],
+        tools:[{type:"web_search_20250305",name:"web_search"}],
+      }),
+    });
+    const data = await res.json();
+    if(data.error) throw new Error(data.error.message||"api");
+    const text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+    const r=extractJSON(text);
+    state.result=r;
+    const entry={id:Date.now(),company:r.company&&r.company.name||state.company,total:r.total_score,uranai:r.uranai_score,genjitsu:r.genjitsu_score,full:r};
+    state.history=[entry,...state.history].slice(0,12);
+    LS.set("enishi_history",JSON.stringify(state.history));
+  }catch(e){
+    state.error="鑑定に失敗しました（"+(e.message||"")+"）。APIキー・通信環境をご確認ください。";
+  }finally{
+    clearInterval(t); state.loading=false; render();
+  }
+}
+
+function sealHTML(k,lab,score,size,big,delay){
+  const hot=score>=85;
+  const fs=big?30:22, ns=big?46:34, ds=big?12:10;
+  return `<div class="seal-wrap">
+    <div class="seal ${hot?'hot':''}" style="width:${size}px;height:${size}px;border:2px solid ${hot?'var(--gold)':'rgba(255,210,190,.55)'};animation-delay:${delay}s">
+      <div class="ring"></div>
+      ${hot?`<div class="fx" style="top:${big?14:9}px;font-size:${big?16:12}px">✦</div>`:''}
+      <div style="text-align:center;line-height:1">
+        <div class="k" style="font-size:${fs}px">${k}</div>
+        <div class="n" style="font-size:${ns}px;margin-top:2px">${score}</div>
+        <div class="d" style="font-size:${ds}px;margin-top:-2px">/ 100</div>
+      </div>
+    </div>
+    <div class="seal-lab">${lab}</div>
+  </div>`;
+}
+function scoreRow(nm,sc,cmt){
+  const col=sc>=80?'var(--gold)':sc>=60?'#c9b074':'var(--sub)';
+  return `<div class="scrow"><div class="top"><span class="nm">${esc(nm)}</span><span class="sc" style="color:${col}">${sc}</span></div>
+    <div class="track"><div class="fill" style="width:${Math.max(0,Math.min(100,sc))}%"></div></div>
+    ${cmt?`<div class="cmt">${esc(cmt)}</div>`:''}</div>`;
+}
+
+function render(){
+  const cfgOpen = !state.apikey;
+  let h = `
+  <details class="cfg" ${cfgOpen?'open':''}>
+    <summary>⚙︎ 設定（Anthropic APIキー）</summary>
+    <div class="body">
+      <label class="lbl">APIキー（端末内のみ保存・送信先はAnthropicのみ）</label>
+      <input id="f_key" type="password" placeholder="sk-ant-..." value="${esc(state.apikey)}" autocomplete="off" />
+      <label class="lbl" style="margin-top:10px">モデル</label>
+      <input id="f_model" value="${esc(state.model)}" />
+      <div class="note">キーは <b>console.anthropic.com</b> で発行。この端末のブラウザ内（localStorage）だけに保存され、外部に送信されません。</div>
+    </div>
+  </details>`;
+
+  if(state.loading){
+    h += `<div class="panel" style="text-align:center;padding:48px 20px">
+      <div class="spinner"></div>
+      <div id="lmsg" style="font-family:'Shippori Mincho B1',serif;margin-top:20px;font-size:16px;color:var(--gold)">${LOADING[0]}</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:8px">Web検索を含むため15〜40秒ほどかかります</div>
+    </div>`;
+    app.innerHTML=h; bindCfg(); return;
+  }
+
+  if(!state.result){
+    h += `<section class="panel">
+      <div style="margin-bottom:12px"><label class="lbl">企業名</label><input id="f_company" value="${esc(state.company)}" placeholder="例：富士ソフト株式会社"/></div>
+      <div style="margin-bottom:12px"><label class="lbl">お名前</label><input id="f_name" value="${esc(state.name)}"/></div>
+      <div class="row" style="margin-bottom:12px">
+        <div style="flex:1"><label class="lbl">生年月日</label><input id="f_date" type="date" value="${esc(state.date)}"/></div>
+        <div style="width:122px"><label class="lbl">生まれた時刻</label><input id="f_time" type="time" value="${esc(state.time)}"/></div>
+      </div>
+      <div style="margin-bottom:16px"><label class="lbl">生まれた場所（市まで）</label><input id="f_place" value="${esc(state.place)}" placeholder="例：神奈川県横浜市"/></div>
+      ${state.error?`<div class="err">${esc(state.error)}</div>`:''}
+      <button class="btn-gold" id="btn_rate">鑑 定 す る</button>
+      <div class="note">※ 現実相性は、むらちゃんの経歴（Apple販売8年・IT転職検討 等）を前提に算出します。企業情報は最新のWeb検索を参照します。</div>
+    </section>`;
+  } else {
+    const r=state.result, hot=r.total_score>=85;
+    h += `<section class="panel" style="text-align:center;padding:26px 18px 22px">
+      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">${esc(r.company&&r.company.name||state.company)}</div>
+      ${sealHTML('縁','総合相性',r.total_score,170,true,0)}
+      <div class="seals">${sealHTML('占','占術相性',r.uranai_score,118,false,.25)}${sealHTML('現','現実相性',r.genjitsu_score,118,false,.4)}</div>
+      ${r.summary_comment?`<p style="font-size:13.5px;color:var(--text);line-height:1.7;margin-top:22px;text-align:left">${esc(r.summary_comment)}</p>`:''}
+    </section>`;
+
+    if(r.company){
+      h += `<div class="panel"><div class="sec-title">会社の素性</div>
+        <div style="margin-bottom:8px">${r.company.industry?`<span class="chip">${esc(r.company.industry)}</span>`:''}${r.company.scale?`<span class="chip">${esc(r.company.scale)}</span>`:''}</div>
+        <p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0 0 8px">${esc(r.company.summary||"")}</p>
+        ${(r.company.highlights||[]).map(x=>`<div style="font-size:12.5px;color:var(--sub);line-height:1.6">・${esc(x)}</div>`).join("")}
+        ${(r.company.sources&&r.company.sources.length)?`<div style="margin-top:8px">${r.company.sources.slice(0,3).map((u,i)=>`<a class="src" href="${esc(u)}" target="_blank" rel="noreferrer">出典${i+1}</a>`).join("")}</div>`:''}
+      </div>`;
+    }
+    if(Array.isArray(r.uranai_breakdown)){
+      h += `<div class="panel"><div class="sec-title">占術相性の内訳（15手法）</div>${r.uranai_breakdown.map(m=>scoreRow(m.method,m.score,m.comment)).join("")}</div>`;
+    }
+    if(Array.isArray(r.genjitsu_breakdown)){
+      h += `<div class="panel"><div class="sec-title">現実相性の内訳（キャリア）</div>${r.genjitsu_breakdown.map(m=>scoreRow(m.factor,m.score,m.comment)).join("")}</div>`;
+    }
+    const a=r.tenshoku_advice;
+    h += `<div class="adv ${hot?'hot':''}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">${hot?'🔓':'🔒'}</span>
+        <span style="font-family:'Shippori Mincho B1',serif;color:${hot?'var(--gold)':'var(--sub)'};font-size:15px">転職活動の戦略</span>
+      </div>`;
+    if(hot && a){
+      h += `${a.verdict?`<p style="font-size:14px;color:var(--star);line-height:1.6;margin:0 0 12px">“${esc(a.verdict)}”</p>`:''}
+        ${(a.steps||[]).map((s,i)=>`<div style="margin-bottom:12px;display:flex;gap:8px"><span style="font-family:'Shippori Mincho B1',serif;color:var(--gold);font-weight:700">${String(i+1).padStart(2,"0")}</span><div><div style="font-size:14px;color:var(--text);font-weight:700">${esc(s.title)}</div><div style="font-size:13px;color:var(--sub);line-height:1.6">${esc(s.detail)}</div></div></div>`).join("")}
+        ${(a.appeal&&a.appeal.length)?`<div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line2)"><div style="font-size:12px;color:var(--sub);margin-bottom:6px">アピール材料</div>${a.appeal.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</div>`:''}
+        ${a.timing?`<div style="margin-top:10px;font-size:13px;color:var(--text)">⏳ 推奨タイミング：<span style="color:var(--gold)">${esc(a.timing)}</span></div>`:''}`;
+    } else {
+      h += `<p style="font-size:13px;color:var(--sub);line-height:1.7;margin:0">総合相性が <b style="color:var(--text)">85点以上</b> になると、この企業に特化した転職戦略が解放されます。<br>現在 <b style="color:var(--gold)">${r.total_score}点</b>（あと ${Math.max(0,85-r.total_score)}点）。</p>`;
+    }
+    h += `</div><button class="btn-ghost" id="btn_again">別の企業を鑑定する</button>`;
+  }
+
+  if(state.history.length){
+    h += `<section style="margin-top:22px"><div style="font-size:12px;color:var(--sub);letter-spacing:.1em;margin-bottom:8px">鑑定の記録</div>
+      <div class="hist">${state.history.map(x=>`<button class="hcard" data-id="${x.id}"><div style="font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${esc(x.company)}</div><div style="font-family:'Shippori Mincho B1',serif;font-size:22px;color:${x.total>=85?'var(--gold)':'var(--text)'}">${x.total}<span style="font-size:11px;color:var(--sub)"> /100</span></div><div style="font-size:10.5px;color:var(--sub)">占 ${x.uranai}・現 ${x.genjitsu}</div></button>`).join("")}</div>
+    </section>`;
+  }
+
+  app.innerHTML=h;
+  bindCfg();
+  // form bindings
+  const bind=(id,key)=>{const e=document.getElementById(id); if(e) e.addEventListener("input",ev=>state[key]=ev.target.value);};
+  bind("f_company","company");bind("f_name","name");bind("f_date","date");bind("f_time","time");bind("f_place","place");
+  const br=document.getElementById("btn_rate"); if(br) br.addEventListener("click",rate);
+  const ba=document.getElementById("btn_again"); if(ba) ba.addEventListener("click",()=>{state.result=null;state.company="";render();});
+  document.querySelectorAll(".hcard").forEach(c=>c.addEventListener("click",()=>{
+    const x=state.history.find(h=>h.id==c.dataset.id); if(x){state.result=x.full;window.scrollTo({top:0,behavior:"smooth"});render();}
+  }));
+}
+function bindCfg(){
+  const k=document.getElementById("f_key"); if(k) k.addEventListener("input",e=>{state.apikey=e.target.value.trim();LS.set("enishi_apikey",state.apikey)});
+  const m=document.getElementById("f_model"); if(m) m.addEventListener("input",e=>{state.model=e.target.value.trim();LS.set("enishi_model",state.model)});
+}
+render();
+
+if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{})); }
+</script>
+</body>
+</html>

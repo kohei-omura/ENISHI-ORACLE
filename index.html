@@ -67,6 +67,7 @@
   .err{color:var(--verm2); font-size:13px; margin-bottom:10px}
   .save-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-top:4px;user-select:none}
   .save-row input{width:auto;accent-color:var(--gold)}
+  .autobox{background:rgba(231,197,116,.06);border:1px solid var(--line2);border-radius:12px;padding:14px}
   details.cfg{margin-bottom:16px; border:1px solid var(--line2); border-radius:12px; background:rgba(18,13,40,.5)}
   details.cfg summary{cursor:pointer; padding:12px 14px; font-size:13px; color:var(--gold); list-style:none}
   details.cfg summary::-webkit-details-marker{display:none}
@@ -133,7 +134,7 @@ const state = {
   company:"",
   name:PROF.name||"", date:PROF.date||"", time:PROF.time||"", place:PROF.place||"",
   blood:PROF.blood||"B", savep:SAVEP,
-  industry:"IT・ソフトウェア", scale:"中堅", salary:"450〜600万", itlv:"高い", culture:"成長重視",
+  industry:"その他", scale:"中堅", salary:"350〜450万", itlv:"ふつう", culture:"バランス", estSalary:null, attrSource:"estimate",
   loading:false, loadingMsg:"15種の占術で鑑定中…", error:"", result:null, ainote:"",
   gkey: LS_get("enishi_gkey",""), gmodel: LS_get("enishi_gmodel","gemini-2.5-flash"),
   history: JSON.parse(LS_get("enishi_history","[]")),
@@ -229,13 +230,15 @@ function genjitsu(){
   const grow={"IT・ソフトウェア":92,"通信・キャリア":80,"メーカー":72,"金融":75,"小売・販売":58,"その他":66}[ind];
   let fit={"IT・ソフトウェア":74,"通信・キャリア":88,"メーカー":66,"金融":60,"小売・販売":90,"その他":66}[ind];
   if(it==="高い"&&ind==="IT・ソフトウェア")fit+=8; if(it==="低い")fit-=6; fit=clamp(fit,35,97);
-  const pay={"〜350万":36,"350〜450万":60,"450〜600万":82,"600万〜":94}[sal];
+  let pay, payCmt;
+  if(state.estSalary){ pay=clamp(50+(state.estSalary-400)*0.15,30,98); payCmt=`入社時の想定年収 約${state.estSalary}万円 と現年収 約400万 の比較。`; }
+  else { pay=clamp({"〜350万":36,"350〜450万":55,"450〜600万":78,"600万〜":92}[sal]); payCmt=`想定年収${sal}と現年収400万の比較。`; }
   let path=Math.round((grow+(cul==="成長重視"?86:cul==="バランス"?72:60))/2); if(it==="高い")path+=6; path=clamp(path,35,98);
   const base={"大企業":88,"中堅":76,"中小・ベンチャー":62}[sc]; let stab=base+(cul==="安定重視"?8:cul==="成長重視"?-4:0); stab=clamp(stab,35,97);
   const bd=[
     {factor:"業界成長性",score:clamp(grow),comment:`${ind}の将来性。AI・IT志向のあなたとの方向性。`},
     {factor:"スキル適合(販売8年/IT志向)",score:fit,comment:"対面販売8年の実績と、IT転職志向・個人開発力の活かしやすさ。"},
-    {factor:"年収アップ余地",score:clamp(pay),comment:`想定年収${sal}と現年収400万の比較。`},
+    {factor:"年収アップ余地",score:pay,comment:payCmt},
     {factor:"キャリアパス",score:path,comment:"将来の成長余地と職種展開の広さ。"},
     {factor:"社風・安定性",score:stab,comment:`${sc}・${cul}の組織との相性。`},
   ];
@@ -280,11 +283,13 @@ function compute(){
   const u=uranai(), g=genjitsu();
   const total=clamp(u.score*0.4+g.score*0.6,40,98);
   const summary=`占術相性 ${u.score} と 現実相性 ${g.score} を総合し、この企業との縁は ${total} 点。${total>=85?"挑戦を後押しできる好相性です。":total>=70?"検討の余地が十分にある相性です。":"慎重な見極めが必要な相性です。"}`;
+  const isAI=state.attrSource==="ai";
   return {
-    company:{name:state.company,industry:state.industry,scale:state.scale,
-      summary:`【入力された前提】業界：${state.industry}／規模：${state.scale}／想定年収：${state.salary}／IT関連度：${state.itlv}／社風：${state.culture}。`,
-      highlights:[`想定年収 ${state.salary}（現 約400万との比較）`,`IT関連度：${state.itlv} ・ 社風：${state.culture}`],sources:[]},
-    uranai_score:u.score, genjitsu_score:g.score, total_score:total,
+    company:{name:state.company,industry:state.industry,scale:state.scale,est_salary:state.estSalary||null,
+      summary:isAI?`業界：${state.industry}／規模：${state.scale}／IT関連度：${state.itlv}／社風：${state.culture}（企業情報から自動判定）。`
+                  :`企業情報が未取得のため、中立の仮定で概算しています。Gemini無料キーを設定すると、企業名から業界・規模・想定年収を自動判定します。`,
+      highlights:[],sources:[]},
+    uranai_score:u.score, genjitsu_score:g.score, total_score:total, genjitsu_estimate:!isAI,
     summary_comment:summary, uranai_breakdown:u.breakdown, genjitsu_breakdown:g.breakdown,
     tenshoku_advice:advice(total),
   };
@@ -293,11 +298,14 @@ function compute(){
 const IND_OPTS=["IT・ソフトウェア","通信・キャリア","メーカー","金融","小売・販売","その他"];
 const SCALE_OPTS=["大企業","中堅","中小・ベンチャー"];
 const ITLV_OPTS=["高い","ふつう","低い"];
+const CULTURE_OPTS=["安定重視","バランス","成長重視"];
 
 async function fetchCompanyAI(){
-  const prompt=`あなたは企業調査アシスタントです。Google検索で「${state.company}」の最新情報（事業・成長性・社風・口コミ・待遇）を調べ、次のJSONのみで答えてください。前置き・説明・コードフェンス・マークダウンは禁止。日本語。数値は0〜100の整数。
-{"industry":"${IND_OPTS.join("|")} のどれか","scale":"${SCALE_OPTS.join("|")} のどれか","it_level":"${ITLV_OPTS.join("|")} のどれか","summary":"事業内容と特徴を2〜3文","highlights":["強みや最近の動き","待遇・将来性など"],"comment":"Apple製品販売8年・IT業界への転職志向・個人開発力(PWA/GitHub Actions/API連携)を持つ候補者にとって、この企業がどうか具体的に2〜3文","career":{"growth":0,"fit":0,"culture":0,"future":0,"reason":"成長性・口コミ・社風に触れて根拠を2〜3文"}}
-careerの基準：growth=業界と企業の成長性、fit=上記候補者とのスキル/志向の適合、culture=社風や働きやすさ・口コミ評判、future=年収アップ余地とキャリアパス。`;
+  const prompt=`あなたは企業調査アシスタントです。Google検索で「${state.company}」の最新情報（事業・成長性・社風・口コミ・年収水準）を調べ、次のJSONのみで答えてください。前置き・説明・コードフェンス・マークダウンは禁止。日本語。数値は整数。
+{"industry":"${IND_OPTS.join("|")} のどれか","scale":"${SCALE_OPTS.join("|")} のどれか","it_level":"${ITLV_OPTS.join("|")} のどれか","culture":"${CULTURE_OPTS.join("|")} のどれか","est_salary":0,"summary":"事業内容と特徴を2〜3文","highlights":["強みや最近の動き","待遇・将来性など"],"comment":"この候補者にとってこの企業がどうか具体的に2〜3文","career":{"growth":0,"fit":0,"culture":0,"future":0,"reason":"成長性・口コミ・社風に触れて根拠を2〜3文"}}
+候補者の前提：Apple製品販売8年・修理2年／法学部卒／現年収約400万／IT業界への転職志向・個人開発力(PWA/GitHub Actions/API連携)あり、実務はIT未経験。
+est_salary は「この候補者がこの企業に入社できた場合に見込まれる想定年収」を万円単位の整数で（例：480）。求人の給与レンジと候補者の経験を踏まえて推定。
+careerの基準：growth=成長性、fit=候補者との適合、culture=社風/働きやすさ/口コミ、future=年収アップ余地とキャリアパス。`;
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.gmodel)}:generateContent?key=${encodeURIComponent(state.gkey)}`;
   const res=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{temperature:.3,maxOutputTokens:1300}})});
@@ -323,12 +331,16 @@ function rate(){
       try{ ai=await fetchCompanyAI(); }
       catch(e){ state.ainote="会社情報の自動取得に失敗（"+(e.message||"")+"）。オフライン鑑定のみ表示します。"; }
     }
-    // AIが業界等を返したら、現実相性の前提に反映（採点は従来どおり決定論的）
+    // AIが会社情報を返したら現実相性の前提に自動反映（採点ロジックは決定論的のまま）
+    state.attrSource="estimate"; state.estSalary=null;
     if(ai&&ai.parsed){
       const p=ai.parsed;
       if(IND_OPTS.includes(p.industry)) state.industry=p.industry;
       if(SCALE_OPTS.includes(p.scale)) state.scale=p.scale;
       if(ITLV_OPTS.includes(p.it_level)) state.itlv=p.it_level;
+      if(CULTURE_OPTS.includes(p.culture)) state.culture=p.culture;
+      let es=Number(p.est_salary); if(isFinite(es)&&es>0){ if(es>3000)es=Math.round(es/10000); if(es>=150&&es<=3000) state.estSalary=Math.round(es); }
+      state.attrSource="ai";
     }
     try{
       const r=compute();
@@ -396,22 +408,22 @@ function render(){
       <label class="save-row"><input type="checkbox" id="f_savep" ${state.savep?'checked':''}/> <span>プロフィールをこの端末に保存する</span></label>
       <div class="note" style="margin:6px 0 0">${state.savep?"この端末にのみ保存し次回自動入力します（コード・リポジトリには残りません）。":"<b style='color:var(--gold)'>本名を保存しないモード</b>：入力はこの場限り。再読み込みで消えます。"}</div>
       <div class="hr" style="margin:14px 0 14px"></div>
-      <div class="sec-title" style="margin-bottom:10px">会社の特徴（数タップで選択）</div>
-      <div style="margin-bottom:12px"><label class="lbl">業界</label><select id="f_industry">${["IT・ソフトウェア","通信・キャリア","メーカー","金融","小売・販売","その他"].map(v=>opt(v,state.industry)).join("")}</select></div>
-      <div class="row" style="margin-bottom:12px"><div style="flex:1"><label class="lbl">企業規模</label><select id="f_scale">${["大企業","中堅","中小・ベンチャー"].map(v=>opt(v,state.scale)).join("")}</select></div><div style="flex:1"><label class="lbl">想定年収</label><select id="f_salary">${["〜350万","350〜450万","450〜600万","600万〜"].map(v=>opt(v,state.salary)).join("")}</select></div></div>
-      <div class="row" style="margin-bottom:16px"><div style="flex:1"><label class="lbl">IT関連度</label><select id="f_itlv">${["高い","ふつう","低い"].map(v=>opt(v,state.itlv)).join("")}</select></div><div style="flex:1"><label class="lbl">社風</label><select id="f_culture">${["安定重視","バランス","成長重視"].map(v=>opt(v,state.culture)).join("")}</select></div></div>
+      <div class="autobox">
+        <div class="sec-title" style="margin-bottom:6px">会社の特徴は自動判定</div>
+        <div style="font-size:12.5px;color:var(--sub);line-height:1.7">業界・規模・社風、そして「<b style="color:var(--gold)">あなたが入社した場合の想定年収</b>」まで、企業名から自動で判定します。${state.gkey?"<b style='color:var(--gold)'>Gemini有効</b>：自動取得します。":"<b style='color:var(--verm2)'>未設定</b>：上の⚙︎設定でGemini無料キーを入れると自動判定。なければ中立の概算になります。"}</div>
+      </div>
       ${state.error?`<div class="err">${esc(state.error)}</div>`:''}
       <button class="btn-gold" id="btn_rate">鑑 定 す る</button>
-      <div class="note">※ 占術相性は生年月日・名前から実計算。現実相性は会社の特徴とむらちゃんの経歴から算出。Gemini無料キーを入れると、業界・規模を自動推定して会社情報も取得します。</div>
+      <div class="note">※ 占術相性は生年月日・名前から実計算。現実相性は「あなたが入社した場合」の会社特徴・想定年収を企業名から自動判定して算出します（Gemini無料キー設定時）。</div>
     </section>`;
   } else {
     const r=state.result, hot=r.total_score>=85;
     h+=`<section class="panel" style="text-align:center;padding:26px 18px 22px"><div style="font-size:12px;color:var(--sub);margin-bottom:6px">${esc(r.company.name)}</div>${sealHTML('縁','総合相性',r.total_score,170,true,0)}<div class="seals">${sealHTML('占','占術相性',r.uranai_score,118,false,.25)}${sealHTML('現','現実相性',r.genjitsu_score,118,false,.4)}</div>${r.summary_comment?`<p style="font-size:13.5px;color:var(--text);line-height:1.7;margin-top:22px;text-align:left">${esc(r.summary_comment)}</p>`:''}</section>`;
     if(state.ainote) h+=`<div class="panel" style="border-color:var(--verm);padding:12px 16px"><div style="font-size:12.5px;color:var(--verm2);line-height:1.6">${esc(state.ainote)}</div></div>`;
-    h+=`<div class="panel"><div class="sec-title">会社の${r.company.ai?'情報（AI調査）':'前提（入力）'}${r.company.ai?' <span style="font-size:10px;color:var(--sub);font-family:Cormorant,serif;letter-spacing:.1em">via Gemini</span>':''}</div><div style="margin-bottom:8px"><span class="chip">${esc(r.company.industry)}</span><span class="chip">${esc(r.company.scale)}</span></div><p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0 0 8px">${esc(r.company.summary)}</p>${(r.company.highlights||[]).map(x=>`<div style="font-size:12.5px;color:var(--sub);line-height:1.6">・${esc(x)}</div>`).join("")}${(r.company.sources&&r.company.sources.length)?`<div style="margin-top:8px">${r.company.sources.map((u,i)=>`<a class="src" href="${esc(u)}" target="_blank" rel="noreferrer">出典${i+1}</a>`).join("")}</div>`:''}</div>`;
+    h+=`<div class="panel"><div class="sec-title">会社の${r.company.ai?'情報（AI調査）':'前提（自動概算）'}${r.company.ai?' <span style="font-size:10px;color:var(--sub);font-family:Cormorant,serif;letter-spacing:.1em">via Gemini</span>':''}</div><div style="margin-bottom:8px"><span class="chip">${esc(r.company.industry)}</span><span class="chip">${esc(r.company.scale)}</span></div>${r.company.est_salary?`<div style="font-size:14px;color:var(--text);margin:0 0 8px">入社時の想定年収（AI推定）：<b style="color:var(--gold);font-family:'Shippori Mincho B1',serif">約${r.company.est_salary}万円</b></div>`:''}<p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0 0 8px">${esc(r.company.summary)}</p>${(r.company.highlights||[]).map(x=>`<div style="font-size:12.5px;color:var(--sub);line-height:1.6">・${esc(x)}</div>`).join("")}${(r.company.sources&&r.company.sources.length)?`<div style="margin-top:8px">${r.company.sources.map((u,i)=>`<a class="src" href="${esc(u)}" target="_blank" rel="noreferrer">出典${i+1}</a>`).join("")}</div>`:''}</div>`;
     if(r.ai_comment) h+=`<div class="panel"><div class="sec-title">AIの寸評</div><p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0">${esc(r.ai_comment)}</p></div>`;
     h+=`<div class="panel"><div class="sec-title">占術相性の内訳（15手法）</div>${r.uranai_breakdown.map(m=>scoreRow(m.method,m.score,m.comment)).join("")}</div>`;
-    h+=`<div class="panel"><div class="sec-title">現実相性の内訳（キャリア）${r.genjitsu_ai?' <span style="font-size:10px;color:var(--star);font-family:Cormorant,serif;letter-spacing:.1em">AI補正</span>':''}</div>${r.genjitsu_breakdown.map(m=>scoreRow(m.factor+(m.aiAdj?' ✦':''),m.score,m.comment)).join("")}${r.career_reason?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--sub);line-height:1.6">AIの判断根拠：${esc(r.career_reason)}</div>`:''}</div>`;
+    h+=`<div class="panel"><div class="sec-title">現実相性の内訳（キャリア）${r.genjitsu_ai?' <span style="font-size:10px;color:var(--star);font-family:Cormorant,serif;letter-spacing:.1em">AI補正</span>':''}</div>${r.genjitsu_breakdown.map(m=>scoreRow(m.factor+(m.aiAdj?' ✦':''),m.score,m.comment)).join("")}${r.career_reason?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--sub);line-height:1.6">AIの判断根拠：${esc(r.career_reason)}</div>`:''}${r.genjitsu_estimate?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line2);font-size:12px;color:var(--verm2);line-height:1.6">Gemini未設定のため中立の概算です。⚙︎設定で無料キーを入れると、この会社の実態に合わせて自動算出します。</div>`:''}</div>`;
     const a=r.tenshoku_advice;
     h+=`<div class="adv ${hot?'hot':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:16px">${hot?'🔓':'🔒'}</span><span style="font-family:'Shippori Mincho B1',serif;color:${hot?'var(--gold)':'var(--sub)'};font-size:15px">転職活動の戦略</span></div>`;
     if(hot){
@@ -426,7 +438,7 @@ function render(){
   }
   app.innerHTML=h;
   const bind=(id,key)=>{const e=document.getElementById(id);if(e)e.addEventListener("input",ev=>state[key]=ev.target.value);};
-  ["company","name","date","time","place","blood","industry","scale","salary","itlv","culture"].forEach(k=>bind("f_"+k,k));
+  ["company","name","date","time","place","blood"].forEach(k=>bind("f_"+k,k));
   const gk=document.getElementById("f_gkey"); if(gk) gk.addEventListener("input",e=>{state.gkey=e.target.value.trim();LS_set("enishi_gkey",state.gkey)});
   const gmd=document.getElementById("f_gmodel"); if(gmd) gmd.addEventListener("change",e=>{state.gmodel=e.target.value;LS_set("enishi_gmodel",state.gmodel)});
   ["name","date","time","place","blood"].forEach(k=>{const e=document.getElementById("f_"+k);if(e){e.addEventListener("input",persistProfile);e.addEventListener("change",persistProfile);}});

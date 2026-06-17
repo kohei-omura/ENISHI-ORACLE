@@ -65,6 +65,8 @@
     border:1px solid var(--line); color:var(--text); font-size:14px; font-family:inherit}
   .note{font-size:11px; color:var(--sub); line-height:1.7; margin-top:10px}
   .err{color:var(--verm2); font-size:13px; margin-bottom:10px}
+  .save-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-top:4px;user-select:none}
+  .save-row input{width:auto;accent-color:var(--gold)}
   details.cfg{margin-bottom:16px; border:1px solid var(--line2); border-radius:12px; background:rgba(18,13,40,.5)}
   details.cfg summary{cursor:pointer; padding:12px 14px; font-size:13px; color:var(--gold); list-style:none}
   details.cfg summary::-webkit-details-marker{display:none}
@@ -124,211 +126,318 @@
 
 <script>
 const METHODS = ["西洋占星術","タロットカード","数秘術","ルーン占い","東洋占星術","風水","四柱推命","紫微斗数","0学占い","姓名判断","九星気学","おみくじ","六曜占星術","算命学","血液型占い"];
-const LOADING = ["企業情報を調べています…","15種の占術で鑑定中…","現実的キャリア相性を算出中…","御朱印を捺しています…"];
-const PROFILE = `- Apple製品の販売 約8年・修理 約2年（現在は販売のみ）
-- 新卒で株式会社コスモネット入社、転職経験なし
-- 年収 約400万円／宮崎市在住／全国転勤の経験多数
-- 愛知学院大学 法学部 法律学科 卒
-- IT業界への転職を検討中（富士ソフトの書類選考通過歴あり）。副業（AI自動化）や独立も視野
-- 強み：対面販売スキル ＋ 技術実装力（PWA・GitHub Actions・API連携など個人開発の実績多数）`;
 
-const LS = {
-  get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},
-  set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},
-};
+const SAVEP = LS_get("enishi_saveprofile","0")==="1";
+let PROF={}; try{ if(SAVEP) PROF=JSON.parse(LS_get("enishi_profile","{}")); }catch(e){ PROF={}; }
 const state = {
-  company:"", name:"大村晃平", date:"1993-04-14", time:"06:18", place:"神奈川県横浜市",
-  loading:false, error:"", result:null,
-  apikey: LS.get("enishi_apikey",""), model: LS.get("enishi_model","claude-sonnet-4-6"),
-  history: JSON.parse(LS.get("enishi_history","[]")),
+  company:"",
+  name:PROF.name||"", date:PROF.date||"", time:PROF.time||"", place:PROF.place||"",
+  blood:PROF.blood||"B", savep:SAVEP,
+  industry:"IT・ソフトウェア", scale:"中堅", salary:"450〜600万", itlv:"高い", culture:"成長重視",
+  loading:false, loadingMsg:"15種の占術で鑑定中…", error:"", result:null, ainote:"",
+  gkey: LS_get("enishi_gkey",""), gmodel: LS_get("enishi_gmodel","gemini-2.5-flash"),
+  history: JSON.parse(LS_get("enishi_history","[]")),
 };
+function persistProfile(){ if(state.savep) LS_set("enishi_profile",JSON.stringify({name:state.name,date:state.date,time:state.time,place:state.place,blood:state.blood})); }
+function LS_get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}}
+function LS_set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 const app = document.getElementById("app");
 const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-function buildPrompt(){
-  return `企業と候補者の「相性」を鑑定してください。
+/* ── 計算ユーティリティ ───────────────────── */
+function h32(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){let a=seed>>>0;return ()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296}}
+function clamp(n,lo,hi){lo=lo==null?35:lo;hi=hi==null?99:hi;return Math.max(lo,Math.min(hi,Math.round(n)))}
+function reduceN(n){while(n>9){n=String(n).split("").reduce((a,c)=>a+(+c||0),0)}return n}
 
-【企業名】${state.company}
-【候補者の生年月日時・出生地】${state.name} / ${state.date} ${state.time} / ${state.place}
-【候補者の経歴】
-${PROFILE}
+const FE=["木","火","土","金","水"];
+function feScore(a,b){a=FE.indexOf(a);b=FE.indexOf(b);if(a<0||b<0)return 65;if(a===b)return 80;if((a+1)%5===b||(b+1)%5===a)return 88;if((a+2)%5===b||(b+2)%5===a)return 50;return 66}
+const STAR_FE={1:"水",2:"土",3:"木",4:"木",5:"土",6:"金",7:"金",8:"土",9:"火"};
+const STAR_NAME={1:"一白水星",2:"二黒土星",3:"三碧木星",4:"四緑木星",5:"五黄土星",6:"六白金星",7:"七赤金星",8:"八白土星",9:"九紫火星"};
+function nineStar(year){let s=reduceN(String(year).split("").reduce((a,c)=>a+ +c,0));let st=11-s;if(st>9)st-=9;if(st<1)st=9;return st}
 
-手順：
-1) まず web_search で「${state.company}」の企業情報（事業内容・業界・規模・将来性・評判）を調べる。検索できない場合は手持ちの知識で答え、company.summary にその旨を反映する。
-2) 占術相性(uranai_score)：次の15種を統合し0〜100で総合判定。各手法も0〜100で採点。手法：${METHODS.join("、")}
-3) 現実相性(genjitsu_score)：候補者の経歴がこの企業でどれだけ活きるか（業界成長性／スキル適合／年収アップ余地／キャリアパス／社風・安定性）を0〜100で判定。
-4) total_score：uranai_score×0.4 + genjitsu_score×0.6 を四捨五入。
-5) tenshoku_advice：この企業を受けるなら最適な転職活動の進め方。
+const SIGNS=[["山羊","土",1,19],["水瓶","風",2,18],["魚","水",3,20],["牡羊","火",4,19],["牡牛","土",5,20],["双子","風",6,21],["蟹","水",7,22],["獅子","火",8,22],["乙女","土",9,22],["天秤","風",10,23],["蠍","水",11,22],["射手","火",12,21],["山羊","土",12,31]];
+function sunSign(m,d){for(let i=0;i<SIGNS.length;i++){const[n,e,mm,dd]=SIGNS[i];if(m===mm&&d<=dd)return{name:n,elem:e};if(m===mm&&d>dd){const nx=SIGNS[(i+1)%12];return{name:nx[0],elem:nx[1]}}}return{name:"山羊",elem:"土"}}
+function wElem(a,b){if(a===b)return 90;const air=(x,y)=>(x==="火"&&y==="風")||(x==="風"&&y==="火");const ew=(x,y)=>(x==="土"&&y==="水")||(x==="水"&&y==="土");if(air(a,b)||air(b,a)||ew(a,b))return 82;if((a==="火"&&b==="水")||(a==="水"&&b==="火"))return 48;if((a==="風"&&b==="土")||(a==="土"&&b==="風"))return 54;return 64}
 
-出力は次のJSONのみ。前置き・説明・コードフェンス・マークダウン禁止。日本語。
-{"company":{"name":"","industry":"","scale":"","summary":"2〜3文","highlights":["",""],"sources":["url"]},"uranai_score":0,"genjitsu_score":0,"total_score":0,"summary_comment":"総合所見を2〜3文","uranai_breakdown":[{"method":"西洋占星術","score":0,"comment":"短く"}],"genjitsu_breakdown":[{"factor":"業界成長性","score":0,"comment":"短く"}],"tenshoku_advice":{"verdict":"一言評価","steps":[{"title":"","detail":""}],"appeal":["",""],"timing":""}}
-uranai_breakdown は15手法すべてを必ず含めること。`;
+const ANIMALS=["子鼠","丑牛","寅虎","卯兎","辰竜","巳蛇","午馬","未羊","申猿","酉鶏","戌犬","亥猪"];
+function zodiac(y){return ((y-4)%12+12)%12}
+function zodiacScore(a,b){const tri=[[0,4,8],[1,5,9],[2,6,10],[3,7,11]];const six=[[0,1],[2,11],[3,10],[4,9],[5,8],[6,7]];if(a===b)return 76;if((Math.abs(a-b))===6)return 45;if(tri.some(g=>g.includes(a)&&g.includes(b)))return 90;if(six.some(p=>p.includes(a)&&p.includes(b)))return 86;return 66}
+
+function pick(arr,r){return arr[Math.floor(r*arr.length)%arr.length]}
+
+/* ── 占術相性 15手法 ───────────────────── */
+function uranai(){
+  const [Y,M,D]=state.date.split("-").map(Number);
+  const seed=h32(state.name+"|"+state.company+"|"+state.date);
+  const out=[];
+  // 1 西洋占星術
+  const ps=sunSign(M,D); const cs=SIGNS[h32(state.company)%12]; const csO={name:cs[0],elem:cs[1]};
+  out.push({method:"西洋占星術",score:clamp(wElem(ps.elem,csO.elem)+(rng(seed+1)()*8-4)),comment:`あなたは${ps.name}座(${ps.elem})、企業の気質は${csO.name}座(${csO.elem})。元素の響き合いで判定。`});
+  // 2 タロット
+  const TAROT=[["愚者",78],["魔術師",88],["女教皇",70],["女帝",86],["皇帝",84],["教皇",74],["恋人",92],["戦車",85],["力",83],["隠者",60],["運命の輪",80],["正義",76],["吊るし人",50],["死神",55],["節制",79],["悪魔",46],["塔",44],["星",90],["月",58],["太陽",95],["審判",77],["世界",93]];
+  const t=pick(TAROT,rng(seed+2)());
+  out.push({method:"タロットカード",score:clamp(t[1]+(rng(seed+22)()*6-3)),comment:`引いた札は「${t[0]}」。二者の縁が示すカード。`});
+  // 3 数秘術
+  const lp=reduceN(Y+M+D); const cn=reduceN(h32(state.company)%900+100);
+  out.push({method:"数秘術",score:clamp(90-Math.abs(lp-cn)*5+(rng(seed+3)()*8-4)),comment:`あなたのライフパス${lp} × 企業数${cn}。数の調和を測定。`});
+  // 4 ルーン
+  const RUNES=[["フェオ",84],["ウル",80],["ソーン",58],["アンスール",82],["ラド",76],["ケン",83],["ギューフ",90],["ウィン",88],["ハガル",48],["ニイド",54],["イス",56],["ヤラ",86],["エオー",70],["ペオース",66],["エオロー",81],["シゲル",92],["ティール",85],["ベオーク",87],["エオー馬",78],["マン",74],["ラーグ",72],["イング",89],["オディラ",75],["ダエグ",91]];
+  const ru=pick(RUNES,rng(seed+4)());
+  out.push({method:"ルーン占い",score:clamp(ru[1]+(rng(seed+44)()*6-3)),comment:`現れたルーンは「${ru[0]}」。北欧の石が告げる相性。`});
+  // 5 東洋占星術(干支)
+  const pa=zodiac(Y); const ca=zodiac((h32("年"+state.company)%80)+1950);
+  out.push({method:"東洋占星術",score:clamp(zodiacScore(pa,ca)+(rng(seed+5)()*6-3)),comment:`あなたは${ANIMALS[pa]}、企業は${ANIMALS[ca]}の相。三合・六合・冲で判定。`});
+  // 6 風水(本命星の五行)
+  const pStar=nineStar(Y); const cStar=(h32("風"+state.company)%9)+1;
+  out.push({method:"風水",score:clamp(feScore(STAR_FE[pStar],STAR_FE[cStar])+(rng(seed+6)()*8-4)),comment:`あなたの${STAR_FE[pStar]}気と企業の${STAR_FE[cStar]}気。場の巡りを五行で測定。`});
+  // 7 四柱推命(日干の五行・概算)
+  const ord=Math.floor(Date.UTC(Y,M-1,D)/86400000); const pDay=FE[Math.floor(((ord%10)+10)%10/2)]; const cDay=FE[h32("柱"+state.company)%5];
+  out.push({method:"四柱推命",score:clamp(feScore(pDay,cDay)+(rng(seed+7)()*8-4)),comment:`日干の${pDay} × 企業の${cDay}（概算）。命式の相生相剋を判定。`});
+  // 8 紫微斗数
+  out.push({method:"紫微斗数",score:clamp(55+rng(seed+8)()*40),comment:`命宮に巡る星の配置から、組織との縁を読む。`});
+  // 9 0学占い
+  const ZERO=["地球","水星","金星","火星","木星","土星","天王星","海王星","冥王星","太陽","月","空"];
+  const z=ZERO[(Y+M+D)%12];
+  out.push({method:"0学占い",score:clamp(60+rng(seed+9)()*32),comment:`支配星「${z}」の運命周期から相性を導出。`});
+  // 10 姓名判断
+  const total=(state.name.length*3+state.company.length*2);
+  out.push({method:"姓名判断",score:clamp(58+((h32(state.name+state.company)%40))+(total%5)),comment:`氏名と社名の格数バランス（簡易五格）で判定。`});
+  // 11 九星気学
+  out.push({method:"九星気学",score:clamp(feScore(STAR_FE[pStar],STAR_FE[cStar])+(rng(seed+11)()*6-3)),comment:`あなたの${STAR_NAME[pStar]} × 企業の${STAR_NAME[cStar]}。`});
+  // 12 おみくじ
+  const OMI=[["大吉",95],["中吉",84],["小吉",74],["吉",68],["末吉",60],["凶",46]];
+  const om=OMI[Math.floor(Math.pow(rng(seed+12)(),1.3)*OMI.length)%OMI.length];
+  out.push({method:"おみくじ",score:clamp(om[1]+(rng(seed+120)()*5-2)),comment:`今回の運勢は「${om[0]}」。`});
+  // 13 六曜占星術
+  const ROKU=[["大安",90],["友引",78],["先勝",72],["先負",64],["赤口",52],["仏滅",46]];
+  const rk=ROKU[h32("六"+state.name+state.company)%6];
+  out.push({method:"六曜占星術",score:clamp(rk[1]+(rng(seed+13)()*5-2)),comment:`縁日の六曜は「${rk[0]}」。`});
+  // 14 算命学
+  out.push({method:"算命学",score:clamp(56+rng(seed+14)()*38),comment:`陰陽五行の十大主星から、組織での活き方を判定。`});
+  // 15 血液型占い
+  const BC={A:{A:78,B:62,O:80,AB:70},B:{A:62,B:84,O:70,AB:76},O:{A:80,B:70,O:82,AB:66},AB:{A:70,B:76,O:66,AB:80}};
+  const cb=["A","B","O","AB"][h32("血"+state.company)%4];
+  out.push({method:"血液型占い",score:clamp((BC[state.blood]||BC.B)[cb]+(rng(seed+15)()*6-3)),comment:`あなた${state.blood}型 × 企業文化${cb}型の働き方相性。`});
+  const score=clamp(out.reduce((a,b)=>a+b.score,0)/out.length,40,98);
+  return {score,breakdown:out};
 }
-function extractJSON(t){
-  t=t.replace(/```json/gi,"").replace(/```/g,"").trim();
-  const a=t.indexOf("{"), b=t.lastIndexOf("}");
-  if(a<0||b<0) throw new Error("parse");
-  return JSON.parse(t.slice(a,b+1));
-}
-async function rate(){
-  if(!state.apikey){ state.error="設定でAnthropic APIキーを入力してください"; render(); return; }
-  if(!state.company.trim()){ state.error="企業名を入力してください"; render(); return; }
-  if(!state.name.trim()||!state.date){ state.error="お名前と生年月日を入力してください"; render(); return; }
-  state.error=""; state.result=null; state.loading=true; render();
-  let i=0; const t=setInterval(()=>{ i=(i+1)%LOADING.length; const el=document.getElementById("lmsg"); if(el) el.textContent=LOADING[i]; },2600);
-  try{
-    const res = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{
-        "content-type":"application/json",
-        "x-api-key":state.apikey,
-        "anthropic-version":"2023-06-01",
-        "anthropic-dangerous-direct-browser-access":"true",
-      },
-      body:JSON.stringify({
-        model:state.model, max_tokens:4096,
-        messages:[{role:"user",content:buildPrompt()}],
-        tools:[{type:"web_search_20250305",name:"web_search"}],
-      }),
-    });
-    const data = await res.json();
-    if(data.error) throw new Error(data.error.message||"api");
-    const text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-    const r=extractJSON(text);
-    state.result=r;
-    const entry={id:Date.now(),company:r.company&&r.company.name||state.company,total:r.total_score,uranai:r.uranai_score,genjitsu:r.genjitsu_score,full:r};
-    state.history=[entry,...state.history].slice(0,12);
-    LS.set("enishi_history",JSON.stringify(state.history));
-  }catch(e){
-    state.error="鑑定に失敗しました（"+(e.message||"")+"）。APIキー・通信環境をご確認ください。";
-  }finally{
-    clearInterval(t); state.loading=false; render();
-  }
+
+/* ── 現実相性（経歴×企業属性）─────────────── */
+function genjitsu(){
+  const ind=state.industry, sc=state.scale, sal=state.salary, it=state.itlv, cul=state.culture;
+  const grow={"IT・ソフトウェア":92,"通信・キャリア":80,"メーカー":72,"金融":75,"小売・販売":58,"その他":66}[ind];
+  let fit={"IT・ソフトウェア":74,"通信・キャリア":88,"メーカー":66,"金融":60,"小売・販売":90,"その他":66}[ind];
+  if(it==="高い"&&ind==="IT・ソフトウェア")fit+=8; if(it==="低い")fit-=6; fit=clamp(fit,35,97);
+  const pay={"〜350万":36,"350〜450万":60,"450〜600万":82,"600万〜":94}[sal];
+  let path=Math.round((grow+(cul==="成長重視"?86:cul==="バランス"?72:60))/2); if(it==="高い")path+=6; path=clamp(path,35,98);
+  const base={"大企業":88,"中堅":76,"中小・ベンチャー":62}[sc]; let stab=base+(cul==="安定重視"?8:cul==="成長重視"?-4:0); stab=clamp(stab,35,97);
+  const bd=[
+    {factor:"業界成長性",score:clamp(grow),comment:`${ind}の将来性。AI・IT志向のあなたとの方向性。`},
+    {factor:"スキル適合(販売8年/IT志向)",score:fit,comment:"対面販売8年の実績と、IT転職志向・個人開発力の活かしやすさ。"},
+    {factor:"年収アップ余地",score:clamp(pay),comment:`想定年収${sal}と現年収400万の比較。`},
+    {factor:"キャリアパス",score:path,comment:"将来の成長余地と職種展開の広さ。"},
+    {factor:"社風・安定性",score:stab,comment:`${sc}・${cul}の組織との相性。`},
+  ];
+  const score=clamp(bd.reduce((a,b)=>a+b.score,0)/bd.length,40,98);
+  return {score,breakdown:bd};
 }
 
+/* ── 85点以上の転職戦略 ───────────────── */
+function advice(total){
+  const ind=state.industry;
+  const stepsByInd={
+    "IT・ソフトウェア":[
+      {title:"GitHubを履歴書にする",detail:"株オラクルやPWA・GitHub Actionsの実績をREADMEとデモURLで提示。販売職からでも「作れる人」と一目で伝わる。"},
+      {title:"販売実績をKPIに翻訳",detail:"販売台数・客単価・継続率などの数字を成果として整理し、IT職の言語に変換する。"},
+      {title:"IT特化エージェント＋直応募",detail:"レバテック等のIT特化と、富士ソフト系の直応募を併用。書類通過の実績を活かす。"},
+    ],
+    "通信・キャリア":[
+      {title:"通信契約の実務をアピール",detail:"Apple販売＋通信契約の経験は同業で即戦力。獲得数・継続率を数値で提示。"},
+      {title:"マネジメント志向を示す",detail:"全国異動・複数拠点の経験を、店舗運営やSVへの適性として打ち出す。"},
+      {title:"リファラル・直応募",detail:"同業ネットワークと直応募を併用し、面接で現場感を語る。"},
+    ],
+    "小売・販売":[
+      {title:"売上実績の定量化",detail:"8年分の販売・接客KPIを一枚に。再現性のある営業力として提示。"},
+      {title:"教育・SV適性",detail:"後輩指導や拠点異動の経験をマネジメント候補としてアピール。"},
+      {title:"条件交渉",detail:"年収レンジを事前確認し、現年収＋実績で交渉する。"},
+    ],
+  };
+  const generic=[
+    {title:"職務経歴書を実績ベースで",detail:"「販売8年＋AI個人開発」の二軸で、他にない人物像を作る。"},
+    {title:"複数チャネルで応募",detail:"エージェント・直応募・リファラルを並行し、機会を最大化。"},
+    {title:"面接逆算で準備",detail:"志望動機を企業の事業と自分の強みで接続して語れるようにする。"},
+  ];
+  return {
+    verdict: total>=90?"占術・現実ともに最良級。挑戦の価値がきわめて高い縁です。":"好相性。十分に勝負できる縁です。",
+    steps: stepsByInd[ind]||generic,
+    appeal:["販売8年の接客・売上実績","GitHub/PWA等の個人開発力","富士ソフト書類通過の実績","全国転勤に対応できる柔軟性"],
+    timing:"求人が増える1〜3月・7〜9月を狙うと有利。まず職務経歴書の整備から。",
+  };
+}
+
+function compute(){
+  const u=uranai(), g=genjitsu();
+  const total=clamp(u.score*0.4+g.score*0.6,40,98);
+  const summary=`占術相性 ${u.score} と 現実相性 ${g.score} を総合し、この企業との縁は ${total} 点。${total>=85?"挑戦を後押しできる好相性です。":total>=70?"検討の余地が十分にある相性です。":"慎重な見極めが必要な相性です。"}`;
+  return {
+    company:{name:state.company,industry:state.industry,scale:state.scale,
+      summary:`【入力された前提】業界：${state.industry}／規模：${state.scale}／想定年収：${state.salary}／IT関連度：${state.itlv}／社風：${state.culture}。`,
+      highlights:[`想定年収 ${state.salary}（現 約400万との比較）`,`IT関連度：${state.itlv} ・ 社風：${state.culture}`],sources:[]},
+    uranai_score:u.score, genjitsu_score:g.score, total_score:total,
+    summary_comment:summary, uranai_breakdown:u.breakdown, genjitsu_breakdown:g.breakdown,
+    tenshoku_advice:advice(total),
+  };
+}
+
+const IND_OPTS=["IT・ソフトウェア","通信・キャリア","メーカー","金融","小売・販売","その他"];
+const SCALE_OPTS=["大企業","中堅","中小・ベンチャー"];
+const ITLV_OPTS=["高い","ふつう","低い"];
+
+async function fetchCompanyAI(){
+  const prompt=`あなたは企業調査アシスタントです。Google検索で「${state.company}」の最新情報（事業・成長性・社風・口コミ・待遇）を調べ、次のJSONのみで答えてください。前置き・説明・コードフェンス・マークダウンは禁止。日本語。数値は0〜100の整数。
+{"industry":"${IND_OPTS.join("|")} のどれか","scale":"${SCALE_OPTS.join("|")} のどれか","it_level":"${ITLV_OPTS.join("|")} のどれか","summary":"事業内容と特徴を2〜3文","highlights":["強みや最近の動き","待遇・将来性など"],"comment":"Apple製品販売8年・IT業界への転職志向・個人開発力(PWA/GitHub Actions/API連携)を持つ候補者にとって、この企業がどうか具体的に2〜3文","career":{"growth":0,"fit":0,"culture":0,"future":0,"reason":"成長性・口コミ・社風に触れて根拠を2〜3文"}}
+careerの基準：growth=業界と企業の成長性、fit=上記候補者とのスキル/志向の適合、culture=社風や働きやすさ・口コミ評判、future=年収アップ余地とキャリアパス。`;
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.gmodel)}:generateContent?key=${encodeURIComponent(state.gkey)}`;
+  const res=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{temperature:.3,maxOutputTokens:1300}})});
+  const data=await res.json();
+  if(data.error) throw new Error(data.error.message||"Gemini error");
+  const cand=(data.candidates||[])[0]||{};
+  const text=((cand.content&&cand.content.parts)||[]).map(p=>p.text).filter(Boolean).join("\n");
+  let parsed={}; try{const a=text.indexOf("{"),b=text.lastIndexOf("}");parsed=JSON.parse(text.slice(a,b+1));}catch(e){parsed={summary:text.slice(0,300)};}
+  const gm=cand.groundingMetadata||{};
+  const urls=((gm.groundingChunks||[]).map(c=>c.web&&c.web.uri).filter(Boolean)).slice(0,3);
+  return {parsed,urls};
+}
+
+function rate(){
+  if(!state.company.trim()){state.error="企業名を入力してください";render();return;}
+  if(!state.name.trim()||!state.date){state.error="お名前と生年月日を入力してください";render();return;}
+  state.error="";state.result=null;state.ainote="";
+  state.loadingMsg = state.gkey ? "会社情報を調べています…" : "15種の占術で鑑定中…";
+  state.loading=true;render();
+  (async()=>{
+    let ai=null;
+    if(state.gkey){
+      try{ ai=await fetchCompanyAI(); }
+      catch(e){ state.ainote="会社情報の自動取得に失敗（"+(e.message||"")+"）。オフライン鑑定のみ表示します。"; }
+    }
+    // AIが業界等を返したら、現実相性の前提に反映（採点は従来どおり決定論的）
+    if(ai&&ai.parsed){
+      const p=ai.parsed;
+      if(IND_OPTS.includes(p.industry)) state.industry=p.industry;
+      if(SCALE_OPTS.includes(p.scale)) state.scale=p.scale;
+      if(ITLV_OPTS.includes(p.it_level)) state.itlv=p.it_level;
+    }
+    try{
+      const r=compute();
+      if(ai&&ai.parsed){
+        const p=ai.parsed;
+        if(p.summary) r.company.summary=p.summary;
+        if(Array.isArray(p.highlights)&&p.highlights.length) r.company.highlights=p.highlights;
+        if(ai.urls&&ai.urls.length) r.company.sources=ai.urls;
+        if(p.comment) r.ai_comment=p.comment;
+        r.company.ai=true;
+        // 現実相性スコアにAIの定性評価をブレンド補正（基本50% + AI50%）
+        const c=p.career||{};
+        const v=x=>{x=Number(x);return (isFinite(x)&&x>=0&&x<=100)?x:null;};
+        const W=0.5, blend=(base,aiv)=>aiv==null?base:Math.max(35,Math.min(99,Math.round(base*(1-W)+aiv*W)));
+        const map=[v(c.growth),v(c.fit),v(c.future),v(c.future),v(c.culture)];
+        let touched=false;
+        r.genjitsu_breakdown.forEach((f,i)=>{ if(map[i]!=null){ const before=f.score; f.score=blend(f.score,map[i]); if(f.score!==before){f.aiAdj=true;touched=true;} }});
+        if(touched){
+          r.genjitsu_ai=true;
+          r.genjitsu_score=Math.max(40,Math.min(98,Math.round(r.genjitsu_breakdown.reduce((a,b)=>a+b.score,0)/r.genjitsu_breakdown.length)));
+          r.total_score=Math.max(40,Math.min(98,Math.round(r.uranai_score*0.4+r.genjitsu_score*0.6)));
+          r.summary_comment=`占術相性 ${r.uranai_score} と 現実相性 ${r.genjitsu_score}（AI補正後）を総合し、この企業との縁は ${r.total_score} 点。`+(r.total_score>=85?"挑戦を後押しできる好相性です。":r.total_score>=70?"検討の余地が十分にある相性です。":"慎重な見極めが必要な相性です。");
+          r.tenshoku_advice=advice(r.total_score);
+          if(c.reason) r.career_reason=c.reason;
+        }
+      }
+      state.result=r;
+      const e={id:Date.now(),company:r.company.name,total:r.total_score,uranai:r.uranai_score,genjitsu:r.genjitsu_score,full:r};
+      state.history=[e,...state.history].slice(0,12); LS_set("enishi_history",JSON.stringify(state.history));
+    }catch(err){state.error="鑑定に失敗しました。入力をご確認ください。";}
+    state.loading=false;render();
+  })();
+}
+
+/* ── 描画 ───────────────────── */
 function sealHTML(k,lab,score,size,big,delay){
-  const hot=score>=85;
-  const fs=big?30:22, ns=big?46:34, ds=big?12:10;
-  return `<div class="seal-wrap">
-    <div class="seal ${hot?'hot':''}" style="width:${size}px;height:${size}px;border:2px solid ${hot?'var(--gold)':'rgba(255,210,190,.55)'};animation-delay:${delay}s">
-      <div class="ring"></div>
-      ${hot?`<div class="fx" style="top:${big?14:9}px;font-size:${big?16:12}px">✦</div>`:''}
-      <div style="text-align:center;line-height:1">
-        <div class="k" style="font-size:${fs}px">${k}</div>
-        <div class="n" style="font-size:${ns}px;margin-top:2px">${score}</div>
-        <div class="d" style="font-size:${ds}px;margin-top:-2px">/ 100</div>
-      </div>
-    </div>
-    <div class="seal-lab">${lab}</div>
-  </div>`;
+  const hot=score>=85,fs=big?30:22,ns=big?46:34,ds=big?12:10;
+  return `<div class="seal-wrap"><div class="seal ${hot?'hot':''}" style="width:${size}px;height:${size}px;border:2px solid ${hot?'var(--gold)':'rgba(255,210,190,.55)'};animation-delay:${delay}s"><div class="ring"></div>${hot?`<div class="fx" style="top:${big?14:9}px;font-size:${big?16:12}px">✦</div>`:''}<div style="text-align:center;line-height:1"><div class="k" style="font-size:${fs}px">${k}</div><div class="n" style="font-size:${ns}px;margin-top:2px">${score}</div><div class="d" style="font-size:${ds}px;margin-top:-2px">/ 100</div></div></div><div class="seal-lab">${lab}</div></div>`;
 }
-function scoreRow(nm,sc,cmt){
-  const col=sc>=80?'var(--gold)':sc>=60?'#c9b074':'var(--sub)';
-  return `<div class="scrow"><div class="top"><span class="nm">${esc(nm)}</span><span class="sc" style="color:${col}">${sc}</span></div>
-    <div class="track"><div class="fill" style="width:${Math.max(0,Math.min(100,sc))}%"></div></div>
-    ${cmt?`<div class="cmt">${esc(cmt)}</div>`:''}</div>`;
-}
+function scoreRow(nm,sc,cmt){const col=sc>=80?'var(--gold)':sc>=60?'#c9b074':'var(--sub)';return `<div class="scrow"><div class="top"><span class="nm">${esc(nm)}</span><span class="sc" style="color:${col}">${sc}</span></div><div class="track"><div class="fill" style="width:${Math.max(0,Math.min(100,sc))}%"></div></div>${cmt?`<div class="cmt">${esc(cmt)}</div>`:''}</div>`;}
+function opt(v,cur){return `<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(v)}</option>`;}
 
 function render(){
-  const cfgOpen = !state.apikey;
-  let h = `
-  <details class="cfg" ${cfgOpen?'open':''}>
-    <summary>⚙︎ 設定（Anthropic APIキー）</summary>
-    <div class="body">
-      <label class="lbl">APIキー（端末内のみ保存・送信先はAnthropicのみ）</label>
-      <input id="f_key" type="password" placeholder="sk-ant-..." value="${esc(state.apikey)}" autocomplete="off" />
-      <label class="lbl" style="margin-top:10px">モデル</label>
-      <input id="f_model" value="${esc(state.model)}" />
-      <div class="note">キーは <b>console.anthropic.com</b> で発行。この端末のブラウザ内（localStorage）だけに保存され、外部に送信されません。</div>
-    </div>
-  </details>`;
-
+  let h="";
   if(state.loading){
-    h += `<div class="panel" style="text-align:center;padding:48px 20px">
-      <div class="spinner"></div>
-      <div id="lmsg" style="font-family:'Shippori Mincho B1',serif;margin-top:20px;font-size:16px;color:var(--gold)">${LOADING[0]}</div>
-      <div style="font-size:12px;color:var(--sub);margin-top:8px">Web検索を含むため15〜40秒ほどかかります</div>
-    </div>`;
-    app.innerHTML=h; bindCfg(); return;
+    h+=`<div class="panel" style="text-align:center;padding:48px 20px"><div class="spinner"></div><div style="font-family:'Shippori Mincho B1',serif;margin-top:20px;font-size:16px;color:var(--gold)">${esc(state.loadingMsg)}</div><div style="font-size:12px;color:var(--sub);margin-top:8px">${state.gkey?"Web検索を含むため数〜20秒ほどかかります":"端末内で計算しています（通信なし）"}</div></div>`;
+    app.innerHTML=h;return;
   }
-
   if(!state.result){
-    h += `<section class="panel">
-      <div style="margin-bottom:12px"><label class="lbl">企業名</label><input id="f_company" value="${esc(state.company)}" placeholder="例：富士ソフト株式会社"/></div>
-      <div style="margin-bottom:12px"><label class="lbl">お名前</label><input id="f_name" value="${esc(state.name)}"/></div>
-      <div class="row" style="margin-bottom:12px">
-        <div style="flex:1"><label class="lbl">生年月日</label><input id="f_date" type="date" value="${esc(state.date)}"/></div>
-        <div style="width:122px"><label class="lbl">生まれた時刻</label><input id="f_time" type="time" value="${esc(state.time)}"/></div>
+    h+=`<details class="cfg" ${state.gkey?'':'open'} style="margin-bottom:16px">
+      <summary>⚙︎ 設定（任意）— Gemini無料キーで会社情報を自動取得</summary>
+      <div class="body">
+        <label class="lbl">Gemini APIキー（端末内のみ保存）</label>
+        <input id="f_gkey" type="password" placeholder="未入力ならオフライン鑑定" value="${esc(state.gkey)}" autocomplete="off"/>
+        <label class="lbl" style="margin-top:10px">モデル</label>
+        <select id="f_gmodel">${["gemini-2.5-flash","gemini-2.5-flash-lite","gemini-2.5-pro"].map(v=>opt(v,state.gmodel)).join("")}</select>
+        <div class="note">無料キーは <b>aistudio.google.com/apikey</b> で取得（カード不要）。${state.gkey?"<b style='color:var(--gold)'>有効</b>：会社情報を自動取得します。":"未入力でも全機能オフラインで動きます。"}<br>キーはこの端末のブラウザ内だけに保存。コードには残りません。</div>
       </div>
-      <div style="margin-bottom:16px"><label class="lbl">生まれた場所（市まで）</label><input id="f_place" value="${esc(state.place)}" placeholder="例：神奈川県横浜市"/></div>
+    </details>`;
+    h+=`<section class="panel">
+      <div style="margin-bottom:12px"><label class="lbl">企業名</label><input id="f_company" value="${esc(state.company)}" placeholder="例：富士ソフト株式会社"/></div>
+      <div style="margin-bottom:12px"><label class="lbl">お名前</label><input id="f_name" value="${esc(state.name)}" placeholder="ニックネーム可"/></div>
+      <div class="row" style="margin-bottom:12px"><div style="flex:1"><label class="lbl">生年月日</label><input id="f_date" type="date" value="${esc(state.date)}"/></div><div style="width:112px"><label class="lbl">生まれた時刻</label><input id="f_time" type="time" value="${esc(state.time)}"/></div></div>
+      <div class="row" style="margin-bottom:10px"><div style="flex:1"><label class="lbl">生まれた場所</label><input id="f_place" value="${esc(state.place)}" placeholder="例：市区町村（任意）"/></div><div style="width:90px"><label class="lbl">血液型</label><select id="f_blood">${["A","B","O","AB"].map(v=>opt(v,state.blood)).join("")}</select></div></div>
+      <label class="save-row"><input type="checkbox" id="f_savep" ${state.savep?'checked':''}/> <span>プロフィールをこの端末に保存する</span></label>
+      <div class="note" style="margin:6px 0 0">${state.savep?"この端末にのみ保存し次回自動入力します（コード・リポジトリには残りません）。":"<b style='color:var(--gold)'>本名を保存しないモード</b>：入力はこの場限り。再読み込みで消えます。"}</div>
+      <div class="hr" style="margin:14px 0 14px"></div>
+      <div class="sec-title" style="margin-bottom:10px">会社の特徴（数タップで選択）</div>
+      <div style="margin-bottom:12px"><label class="lbl">業界</label><select id="f_industry">${["IT・ソフトウェア","通信・キャリア","メーカー","金融","小売・販売","その他"].map(v=>opt(v,state.industry)).join("")}</select></div>
+      <div class="row" style="margin-bottom:12px"><div style="flex:1"><label class="lbl">企業規模</label><select id="f_scale">${["大企業","中堅","中小・ベンチャー"].map(v=>opt(v,state.scale)).join("")}</select></div><div style="flex:1"><label class="lbl">想定年収</label><select id="f_salary">${["〜350万","350〜450万","450〜600万","600万〜"].map(v=>opt(v,state.salary)).join("")}</select></div></div>
+      <div class="row" style="margin-bottom:16px"><div style="flex:1"><label class="lbl">IT関連度</label><select id="f_itlv">${["高い","ふつう","低い"].map(v=>opt(v,state.itlv)).join("")}</select></div><div style="flex:1"><label class="lbl">社風</label><select id="f_culture">${["安定重視","バランス","成長重視"].map(v=>opt(v,state.culture)).join("")}</select></div></div>
       ${state.error?`<div class="err">${esc(state.error)}</div>`:''}
       <button class="btn-gold" id="btn_rate">鑑 定 す る</button>
-      <div class="note">※ 現実相性は、むらちゃんの経歴（Apple販売8年・IT転職検討 等）を前提に算出します。企業情報は最新のWeb検索を参照します。</div>
+      <div class="note">※ 占術相性は生年月日・名前から実計算。現実相性は会社の特徴とむらちゃんの経歴から算出。Gemini無料キーを入れると、業界・規模を自動推定して会社情報も取得します。</div>
     </section>`;
   } else {
     const r=state.result, hot=r.total_score>=85;
-    h += `<section class="panel" style="text-align:center;padding:26px 18px 22px">
-      <div style="font-size:12px;color:var(--sub);margin-bottom:6px">${esc(r.company&&r.company.name||state.company)}</div>
-      ${sealHTML('縁','総合相性',r.total_score,170,true,0)}
-      <div class="seals">${sealHTML('占','占術相性',r.uranai_score,118,false,.25)}${sealHTML('現','現実相性',r.genjitsu_score,118,false,.4)}</div>
-      ${r.summary_comment?`<p style="font-size:13.5px;color:var(--text);line-height:1.7;margin-top:22px;text-align:left">${esc(r.summary_comment)}</p>`:''}
-    </section>`;
-
-    if(r.company){
-      h += `<div class="panel"><div class="sec-title">会社の素性</div>
-        <div style="margin-bottom:8px">${r.company.industry?`<span class="chip">${esc(r.company.industry)}</span>`:''}${r.company.scale?`<span class="chip">${esc(r.company.scale)}</span>`:''}</div>
-        <p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0 0 8px">${esc(r.company.summary||"")}</p>
-        ${(r.company.highlights||[]).map(x=>`<div style="font-size:12.5px;color:var(--sub);line-height:1.6">・${esc(x)}</div>`).join("")}
-        ${(r.company.sources&&r.company.sources.length)?`<div style="margin-top:8px">${r.company.sources.slice(0,3).map((u,i)=>`<a class="src" href="${esc(u)}" target="_blank" rel="noreferrer">出典${i+1}</a>`).join("")}</div>`:''}
-      </div>`;
-    }
-    if(Array.isArray(r.uranai_breakdown)){
-      h += `<div class="panel"><div class="sec-title">占術相性の内訳（15手法）</div>${r.uranai_breakdown.map(m=>scoreRow(m.method,m.score,m.comment)).join("")}</div>`;
-    }
-    if(Array.isArray(r.genjitsu_breakdown)){
-      h += `<div class="panel"><div class="sec-title">現実相性の内訳（キャリア）</div>${r.genjitsu_breakdown.map(m=>scoreRow(m.factor,m.score,m.comment)).join("")}</div>`;
-    }
+    h+=`<section class="panel" style="text-align:center;padding:26px 18px 22px"><div style="font-size:12px;color:var(--sub);margin-bottom:6px">${esc(r.company.name)}</div>${sealHTML('縁','総合相性',r.total_score,170,true,0)}<div class="seals">${sealHTML('占','占術相性',r.uranai_score,118,false,.25)}${sealHTML('現','現実相性',r.genjitsu_score,118,false,.4)}</div>${r.summary_comment?`<p style="font-size:13.5px;color:var(--text);line-height:1.7;margin-top:22px;text-align:left">${esc(r.summary_comment)}</p>`:''}</section>`;
+    if(state.ainote) h+=`<div class="panel" style="border-color:var(--verm);padding:12px 16px"><div style="font-size:12.5px;color:var(--verm2);line-height:1.6">${esc(state.ainote)}</div></div>`;
+    h+=`<div class="panel"><div class="sec-title">会社の${r.company.ai?'情報（AI調査）':'前提（入力）'}${r.company.ai?' <span style="font-size:10px;color:var(--sub);font-family:Cormorant,serif;letter-spacing:.1em">via Gemini</span>':''}</div><div style="margin-bottom:8px"><span class="chip">${esc(r.company.industry)}</span><span class="chip">${esc(r.company.scale)}</span></div><p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0 0 8px">${esc(r.company.summary)}</p>${(r.company.highlights||[]).map(x=>`<div style="font-size:12.5px;color:var(--sub);line-height:1.6">・${esc(x)}</div>`).join("")}${(r.company.sources&&r.company.sources.length)?`<div style="margin-top:8px">${r.company.sources.map((u,i)=>`<a class="src" href="${esc(u)}" target="_blank" rel="noreferrer">出典${i+1}</a>`).join("")}</div>`:''}</div>`;
+    if(r.ai_comment) h+=`<div class="panel"><div class="sec-title">AIの寸評</div><p style="font-size:13.5px;color:var(--text);line-height:1.7;margin:0">${esc(r.ai_comment)}</p></div>`;
+    h+=`<div class="panel"><div class="sec-title">占術相性の内訳（15手法）</div>${r.uranai_breakdown.map(m=>scoreRow(m.method,m.score,m.comment)).join("")}</div>`;
+    h+=`<div class="panel"><div class="sec-title">現実相性の内訳（キャリア）${r.genjitsu_ai?' <span style="font-size:10px;color:var(--star);font-family:Cormorant,serif;letter-spacing:.1em">AI補正</span>':''}</div>${r.genjitsu_breakdown.map(m=>scoreRow(m.factor+(m.aiAdj?' ✦':''),m.score,m.comment)).join("")}${r.career_reason?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--sub);line-height:1.6">AIの判断根拠：${esc(r.career_reason)}</div>`:''}</div>`;
     const a=r.tenshoku_advice;
-    h += `<div class="adv ${hot?'hot':''}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:16px">${hot?'🔓':'🔒'}</span>
-        <span style="font-family:'Shippori Mincho B1',serif;color:${hot?'var(--gold)':'var(--sub)'};font-size:15px">転職活動の戦略</span>
-      </div>`;
-    if(hot && a){
-      h += `${a.verdict?`<p style="font-size:14px;color:var(--star);line-height:1.6;margin:0 0 12px">“${esc(a.verdict)}”</p>`:''}
-        ${(a.steps||[]).map((s,i)=>`<div style="margin-bottom:12px;display:flex;gap:8px"><span style="font-family:'Shippori Mincho B1',serif;color:var(--gold);font-weight:700">${String(i+1).padStart(2,"0")}</span><div><div style="font-size:14px;color:var(--text);font-weight:700">${esc(s.title)}</div><div style="font-size:13px;color:var(--sub);line-height:1.6">${esc(s.detail)}</div></div></div>`).join("")}
-        ${(a.appeal&&a.appeal.length)?`<div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line2)"><div style="font-size:12px;color:var(--sub);margin-bottom:6px">アピール材料</div>${a.appeal.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</div>`:''}
-        ${a.timing?`<div style="margin-top:10px;font-size:13px;color:var(--text)">⏳ 推奨タイミング：<span style="color:var(--gold)">${esc(a.timing)}</span></div>`:''}`;
-    } else {
-      h += `<p style="font-size:13px;color:var(--sub);line-height:1.7;margin:0">総合相性が <b style="color:var(--text)">85点以上</b> になると、この企業に特化した転職戦略が解放されます。<br>現在 <b style="color:var(--gold)">${r.total_score}点</b>（あと ${Math.max(0,85-r.total_score)}点）。</p>`;
+    h+=`<div class="adv ${hot?'hot':''}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:16px">${hot?'🔓':'🔒'}</span><span style="font-family:'Shippori Mincho B1',serif;color:${hot?'var(--gold)':'var(--sub)'};font-size:15px">転職活動の戦略</span></div>`;
+    if(hot){
+      h+=`${a.verdict?`<p style="font-size:14px;color:var(--star);line-height:1.6;margin:0 0 12px">“${esc(a.verdict)}”</p>`:''}${a.steps.map((s,i)=>`<div style="margin-bottom:12px;display:flex;gap:8px"><span style="font-family:'Shippori Mincho B1',serif;color:var(--gold);font-weight:700">${String(i+1).padStart(2,"0")}</span><div><div style="font-size:14px;color:var(--text);font-weight:700">${esc(s.title)}</div><div style="font-size:13px;color:var(--sub);line-height:1.6">${esc(s.detail)}</div></div></div>`).join("")}<div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line2)"><div style="font-size:12px;color:var(--sub);margin-bottom:6px">アピール材料</div>${a.appeal.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</div><div style="margin-top:10px;font-size:13px;color:var(--text)">⏳ ${esc(a.timing)}</div>`;
+    }else{
+      h+=`<p style="font-size:13px;color:var(--sub);line-height:1.7;margin:0">総合相性が <b style="color:var(--text)">85点以上</b> で、この企業向けの転職戦略が解放されます。<br>現在 <b style="color:var(--gold)">${r.total_score}点</b>（あと ${Math.max(0,85-r.total_score)}点）。</p>`;
     }
-    h += `</div><button class="btn-ghost" id="btn_again">別の企業を鑑定する</button>`;
+    h+=`</div><button class="btn-ghost" id="btn_again">別の企業を鑑定する</button>`;
   }
-
   if(state.history.length){
-    h += `<section style="margin-top:22px"><div style="font-size:12px;color:var(--sub);letter-spacing:.1em;margin-bottom:8px">鑑定の記録</div>
-      <div class="hist">${state.history.map(x=>`<button class="hcard" data-id="${x.id}"><div style="font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${esc(x.company)}</div><div style="font-family:'Shippori Mincho B1',serif;font-size:22px;color:${x.total>=85?'var(--gold)':'var(--text)'}">${x.total}<span style="font-size:11px;color:var(--sub)"> /100</span></div><div style="font-size:10.5px;color:var(--sub)">占 ${x.uranai}・現 ${x.genjitsu}</div></button>`).join("")}</div>
-    </section>`;
+    h+=`<section style="margin-top:22px"><div style="font-size:12px;color:var(--sub);letter-spacing:.1em;margin-bottom:8px">鑑定の記録</div><div class="hist">${state.history.map(x=>`<button class="hcard" data-id="${x.id}"><div style="font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${esc(x.company)}</div><div style="font-family:'Shippori Mincho B1',serif;font-size:22px;color:${x.total>=85?'var(--gold)':'var(--text)'}">${x.total}<span style="font-size:11px;color:var(--sub)"> /100</span></div><div style="font-size:10.5px;color:var(--sub)">占 ${x.uranai}・現 ${x.genjitsu}</div></button>`).join("")}</div></section>`;
   }
-
   app.innerHTML=h;
-  bindCfg();
-  // form bindings
-  const bind=(id,key)=>{const e=document.getElementById(id); if(e) e.addEventListener("input",ev=>state[key]=ev.target.value);};
-  bind("f_company","company");bind("f_name","name");bind("f_date","date");bind("f_time","time");bind("f_place","place");
-  const br=document.getElementById("btn_rate"); if(br) br.addEventListener("click",rate);
-  const ba=document.getElementById("btn_again"); if(ba) ba.addEventListener("click",()=>{state.result=null;state.company="";render();});
-  document.querySelectorAll(".hcard").forEach(c=>c.addEventListener("click",()=>{
-    const x=state.history.find(h=>h.id==c.dataset.id); if(x){state.result=x.full;window.scrollTo({top:0,behavior:"smooth"});render();}
-  }));
-}
-function bindCfg(){
-  const k=document.getElementById("f_key"); if(k) k.addEventListener("input",e=>{state.apikey=e.target.value.trim();LS.set("enishi_apikey",state.apikey)});
-  const m=document.getElementById("f_model"); if(m) m.addEventListener("input",e=>{state.model=e.target.value.trim();LS.set("enishi_model",state.model)});
+  const bind=(id,key)=>{const e=document.getElementById(id);if(e)e.addEventListener("input",ev=>state[key]=ev.target.value);};
+  ["company","name","date","time","place","blood","industry","scale","salary","itlv","culture"].forEach(k=>bind("f_"+k,k));
+  const gk=document.getElementById("f_gkey"); if(gk) gk.addEventListener("input",e=>{state.gkey=e.target.value.trim();LS_set("enishi_gkey",state.gkey)});
+  const gmd=document.getElementById("f_gmodel"); if(gmd) gmd.addEventListener("change",e=>{state.gmodel=e.target.value;LS_set("enishi_gmodel",state.gmodel)});
+  ["name","date","time","place","blood"].forEach(k=>{const e=document.getElementById("f_"+k);if(e){e.addEventListener("input",persistProfile);e.addEventListener("change",persistProfile);}});
+  const sp=document.getElementById("f_savep"); if(sp) sp.addEventListener("change",e=>{state.savep=e.target.checked;LS_set("enishi_saveprofile",state.savep?"1":"0");if(state.savep){persistProfile();}else{try{localStorage.removeItem("enishi_profile")}catch(_){}}render();});
+  const br=document.getElementById("btn_rate");if(br)br.addEventListener("click",rate);
+  const ba=document.getElementById("btn_again");if(ba)ba.addEventListener("click",()=>{state.result=null;state.company="";render();});
+  document.querySelectorAll(".hcard").forEach(c=>c.addEventListener("click",()=>{const x=state.history.find(h=>h.id==c.dataset.id);if(x){state.result=x.full;window.scrollTo({top:0,behavior:"smooth"});render();}}));
 }
 render();
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
 
-if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{})); }
 </script>
 </body>
 </html>

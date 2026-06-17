@@ -1,4 +1,4 @@
-const CACHE = "enishi-v1";
+const CACHE = "enishi-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -25,7 +25,7 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   // Never cache the Anthropic API — always go to network
-  if (url.hostname.includes("api.anthropic.com")) return;
+  if (url.hostname.includes("api.anthropic.com") || url.hostname.includes("generativelanguage.googleapis.com")) return;
   // App shell + fonts: cache-first, fall back to network
   e.respondWith(
     caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {

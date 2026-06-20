@@ -304,10 +304,10 @@ const CULTURE_OPTS=["安定重視","バランス","成長重視"];
 
 async function fetchCompanyAI(){
   const prompt=`あなたは企業調査アシスタントです。Google検索で「${state.company}」の最新情報（事業・成長性・社風・口コミ・年収水準）を調べ、次のJSONのみで答えてください。前置き・説明・コードフェンス・マークダウンは禁止。日本語。数値は整数。
-{"industry":"${IND_OPTS.join("|")} のどれか","scale":"${SCALE_OPTS.join("|")} のどれか","it_level":"${ITLV_OPTS.join("|")} のどれか","culture":"${CULTURE_OPTS.join("|")} のどれか","est_salary":0,"summary":"事業内容と特徴を2〜3文","highlights":["強みや最近の動き","待遇・将来性など"],"comment":"この候補者にとってこの企業がどうか具体的に2〜3文","career":{"growth":0,"fit":0,"culture":0,"future":0,"reason":"成長性・口コミ・社風に触れて根拠を2〜3文"}}
+{"industry":"${IND_OPTS.join("|")} のどれか","scale":"${SCALE_OPTS.join("|")} のどれか","it_level":"${ITLV_OPTS.join("|")} のどれか","culture":"${CULTURE_OPTS.join("|")} のどれか","est_salary":0,"summary":"事業内容と特徴を2〜3文","highlights":["強みや最近の動き","待遇・将来性など"],"comment":"この候補者にとってこの企業がどうか具体的に2〜3文","career":{"growth":75,"fit":70,"culture":70,"future":70,"reason":"成長性・口コミ・社風に触れて根拠を2〜3文"}}
 候補者の前提：Apple製品販売8年・修理2年／法学部卒／現年収約400万／IT業界への転職志向・個人開発力(PWA/GitHub Actions/API連携)あり、実務はIT未経験。
 est_salary は「この候補者がこの企業に入社できた場合に見込まれる想定年収」を万円単位の整数で（例：480）。求人の給与レンジと候補者の経験を踏まえて推定。
-careerの基準：growth=成長性、fit=候補者との適合、culture=社風/働きやすさ/口コミ、future=年収アップ余地とキャリアパス。`;
+careerの基準：growth=成長性、fit=候補者との適合、culture=社風/働きやすさ/口コミ、future=年収アップ余地とキャリアパス。career の4数値は必ず0〜100の整数で実評価する（0や未記入にしない。良い企業なら高く付ける）。`;
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.gmodel)}:generateContent?key=${encodeURIComponent(state.gkey)}`;
   const genCfg={temperature:.3,maxOutputTokens:8192};
   if(state.gmodel.includes("flash")) genCfg.thinkingConfig={thinkingBudget:0};
@@ -359,8 +359,8 @@ function rate(){
         r.company.ai=true;
         // 現実相性スコアにAIの定性評価をブレンド補正（基本50% + AI50%）
         const c=p.career||{};
-        const v=x=>{x=Number(x);return (isFinite(x)&&x>=0&&x<=100)?x:null;};
-        const W=0.5, blend=(base,aiv)=>aiv==null?base:Math.max(35,Math.min(99,Math.round(base*(1-W)+aiv*W)));
+        const v=x=>{x=Number(x);return (isFinite(x)&&x>=30&&x<=100)?x:null;};
+        const W=0.35, blend=(base,aiv)=>aiv==null?base:Math.max(35,Math.min(99,Math.round(base*(1-W)+aiv*W)));
         const map=[v(c.growth),v(c.fit),v(c.future),v(c.future),v(c.culture)];
         let touched=false;
         r.genjitsu_breakdown.forEach((f,i)=>{ if(map[i]!=null){ const before=f.score; f.score=blend(f.score,map[i]); if(f.score!==before){f.aiAdj=true;touched=true;} }});

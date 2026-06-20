@@ -1,4 +1,4 @@
-const CACHE = "enishi-v6";
+const CACHE = "enishi-v7";
 const SHELL = [
   "./",
   "./index.html",

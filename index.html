@@ -309,13 +309,16 @@ async function fetchCompanyAI(){
 est_salary は「この候補者がこの企業に入社できた場合に見込まれる想定年収」を万円単位の整数で（例：480）。求人の給与レンジと候補者の経験を踏まえて推定。
 careerの基準：growth=成長性、fit=候補者との適合、culture=社風/働きやすさ/口コミ、future=年収アップ余地とキャリアパス。`;
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.gmodel)}:generateContent?key=${encodeURIComponent(state.gkey)}`;
+  const genCfg={temperature:.3,maxOutputTokens:8192};
+  if(state.gmodel.includes("flash")) genCfg.thinkingConfig={thinkingBudget:0};
   const res=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:{temperature:.3,maxOutputTokens:1300}})});
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],tools:[{google_search:{}}],generationConfig:genCfg})});
   const data=await res.json();
   if(data.error) throw new Error(data.error.message||"Gemini error");
   const cand=(data.candidates||[])[0]||{};
   const text=((cand.content&&cand.content.parts)||[]).map(p=>p.text).filter(Boolean).join("\n");
-  let parsed={}; try{const a=text.indexOf("{"),b=text.lastIndexOf("}");parsed=JSON.parse(text.slice(a,b+1));}catch(e){parsed={summary:text.slice(0,300)};}
+  let parsed=null;
+  if(text){ let t=text.replace(/```json/gi,"").replace(/```/g,"").trim(); const a=t.indexOf("{"),b=t.lastIndexOf("}"); if(a>=0&&b>a){ try{ parsed=JSON.parse(t.slice(a,b+1)); }catch(e){ parsed=null; } } }
   const gm=cand.groundingMetadata||{};
   const urls=((gm.groundingChunks||[]).map(c=>c.web&&c.web.uri).filter(Boolean)).slice(0,3);
   return {parsed,urls};
@@ -335,13 +338,14 @@ function rate(){
     }
     // AIが会社情報を返したら現実相性の前提に自動反映（採点ロジックは決定論的のまま）
     state.attrSource="estimate"; state.estSalary=null;
+    if(state.gkey && ai && !ai.parsed && !state.ainote){ state.ainote="会社情報の解析に失敗しました（応答形式）。もう一度お試しください。オフライン概算で表示します。"; }
     if(ai&&ai.parsed){
       const p=ai.parsed;
       if(IND_OPTS.includes(p.industry)) state.industry=p.industry;
       if(SCALE_OPTS.includes(p.scale)) state.scale=p.scale;
       if(ITLV_OPTS.includes(p.it_level)) state.itlv=p.it_level;
       if(CULTURE_OPTS.includes(p.culture)) state.culture=p.culture;
-      let es=Number(p.est_salary); if(isFinite(es)&&es>0){ if(es>3000)es=Math.round(es/10000); if(es>=150&&es<=3000) state.estSalary=Math.round(es); }
+      let es=parseInt(String(p.est_salary==null?"":p.est_salary).replace(/[^0-9]/g,""),10); if(isFinite(es)&&es>0){ if(es>3000)es=Math.round(es/10000); if(es>=150&&es<=3000) state.estSalary=Math.round(es); }
       state.attrSource="ai";
     }
     try{

@@ -152,18 +152,18 @@ function clamp(n,lo,hi){lo=lo==null?35:lo;hi=hi==null?99:hi;return Math.max(lo,M
 function reduceN(n){while(n>9){n=String(n).split("").reduce((a,c)=>a+(+c||0),0)}return n}
 
 const FE=["木","火","土","金","水"];
-function feScore(a,b){a=FE.indexOf(a);b=FE.indexOf(b);if(a<0||b<0)return 65;if(a===b)return 80;if((a+1)%5===b||(b+1)%5===a)return 88;if((a+2)%5===b||(b+2)%5===a)return 50;return 66}
+function feScore(a,b){a=FE.indexOf(a);b=FE.indexOf(b);if(a<0||b<0)return 70;if(a===b)return 84;if((a+1)%5===b||(b+1)%5===a)return 93;if((a+2)%5===b||(b+2)%5===a)return 58;return 74}
 const STAR_FE={1:"水",2:"土",3:"木",4:"木",5:"土",6:"金",7:"金",8:"土",9:"火"};
 const STAR_NAME={1:"一白水星",2:"二黒土星",3:"三碧木星",4:"四緑木星",5:"五黄土星",6:"六白金星",7:"七赤金星",8:"八白土星",9:"九紫火星"};
 function nineStar(year){let s=reduceN(String(year).split("").reduce((a,c)=>a+ +c,0));let st=11-s;if(st>9)st-=9;if(st<1)st=9;return st}
 
 const SIGNS=[["山羊","土",1,19],["水瓶","風",2,18],["魚","水",3,20],["牡羊","火",4,19],["牡牛","土",5,20],["双子","風",6,21],["蟹","水",7,22],["獅子","火",8,22],["乙女","土",9,22],["天秤","風",10,23],["蠍","水",11,22],["射手","火",12,21],["山羊","土",12,31]];
 function sunSign(m,d){for(let i=0;i<SIGNS.length;i++){const[n,e,mm,dd]=SIGNS[i];if(m===mm&&d<=dd)return{name:n,elem:e};if(m===mm&&d>dd){const nx=SIGNS[(i+1)%12];return{name:nx[0],elem:nx[1]}}}return{name:"山羊",elem:"土"}}
-function wElem(a,b){if(a===b)return 90;const air=(x,y)=>(x==="火"&&y==="風")||(x==="風"&&y==="火");const ew=(x,y)=>(x==="土"&&y==="水")||(x==="水"&&y==="土");if(air(a,b)||air(b,a)||ew(a,b))return 82;if((a==="火"&&b==="水")||(a==="水"&&b==="火"))return 48;if((a==="風"&&b==="土")||(a==="土"&&b==="風"))return 54;return 64}
+function wElem(a,b){if(a===b)return 94;const air=(x,y)=>(x==="火"&&y==="風")||(x==="風"&&y==="火");const ew=(x,y)=>(x==="土"&&y==="水")||(x==="水"&&y==="土");if(air(a,b)||air(b,a)||ew(a,b))return 88;if((a==="火"&&b==="水")||(a==="水"&&b==="火"))return 56;if((a==="風"&&b==="土")||(a==="土"&&b==="風"))return 62;return 74}
 
 const ANIMALS=["子鼠","丑牛","寅虎","卯兎","辰竜","巳蛇","午馬","未羊","申猿","酉鶏","戌犬","亥猪"];
 function zodiac(y){return ((y-4)%12+12)%12}
-function zodiacScore(a,b){const tri=[[0,4,8],[1,5,9],[2,6,10],[3,7,11]];const six=[[0,1],[2,11],[3,10],[4,9],[5,8],[6,7]];if(a===b)return 76;if((Math.abs(a-b))===6)return 45;if(tri.some(g=>g.includes(a)&&g.includes(b)))return 90;if(six.some(p=>p.includes(a)&&p.includes(b)))return 86;return 66}
+function zodiacScore(a,b){const tri=[[0,4,8],[1,5,9],[2,6,10],[3,7,11]];const six=[[0,1],[2,11],[3,10],[4,9],[5,8],[6,7]];if(a===b)return 80;if((Math.abs(a-b))===6)return 55;if(tri.some(g=>g.includes(a)&&g.includes(b)))return 95;if(six.some(p=>p.includes(a)&&p.includes(b)))return 91;return 74}
 
 function pick(arr,r){return arr[Math.floor(r*arr.length)%arr.length]}
 
@@ -181,7 +181,7 @@ function uranai(){
   out.push({method:"タロットカード",score:clamp(t[1]+(rng(seed+22)()*6-3)),comment:`引いた札は「${t[0]}」。二者の縁が示すカード。`});
   // 3 数秘術
   const lp=reduceN(Y+M+D); const cn=reduceN(h32(state.company)%900+100);
-  out.push({method:"数秘術",score:clamp(90-Math.abs(lp-cn)*5+(rng(seed+3)()*8-4)),comment:`あなたのライフパス${lp} × 企業数${cn}。数の調和を測定。`});
+  out.push({method:"数秘術",score:clamp(94-Math.abs(lp-cn)*4+(rng(seed+3)()*8-4)),comment:`あなたのライフパス${lp} × 企業数${cn}。数の調和を測定。`});
   // 4 ルーン
   const RUNES=[["フェオ",84],["ウル",80],["ソーン",58],["アンスール",82],["ラド",76],["ケン",83],["ギューフ",90],["ウィン",88],["ハガル",48],["ニイド",54],["イス",56],["ヤラ",86],["エオー",70],["ペオース",66],["エオロー",81],["シゲル",92],["ティール",85],["ベオーク",87],["エオー馬",78],["マン",74],["ラーグ",72],["イング",89],["オディラ",75],["ダエグ",91]];
   const ru=pick(RUNES,rng(seed+4)());
@@ -220,21 +220,23 @@ function uranai(){
   const BC={A:{A:78,B:62,O:80,AB:70},B:{A:62,B:84,O:70,AB:76},O:{A:80,B:70,O:82,AB:66},AB:{A:70,B:76,O:66,AB:80}};
   const cb=["A","B","O","AB"][h32("血"+state.company)%4];
   out.push({method:"血液型占い",score:clamp((BC[state.blood]||BC.B)[cb]+(rng(seed+15)()*6-3)),comment:`あなた${state.blood}型 × 企業文化${cb}型の働き方相性。`});
-  const score=clamp(out.reduce((a,b)=>a+b.score,0)/out.length,40,98);
+  const W={"西洋占星術":2,"数秘術":2,"東洋占星術":2,"風水":2,"四柱推命":2,"九星気学":2};
+  const sw=out.reduce((a,b)=>a+(W[b.method]||1),0);
+  const score=clamp(out.reduce((a,b)=>a+b.score*(W[b.method]||1),0)/sw,40,98);
   return {score,breakdown:out};
 }
 
 /* ── 現実相性（経歴×企業属性）─────────────── */
 function genjitsu(){
   const ind=state.industry, sc=state.scale, sal=state.salary, it=state.itlv, cul=state.culture;
-  const grow={"IT・ソフトウェア":92,"通信・キャリア":80,"メーカー":72,"金融":75,"小売・販売":58,"その他":66}[ind];
-  let fit={"IT・ソフトウェア":74,"通信・キャリア":88,"メーカー":66,"金融":60,"小売・販売":90,"その他":66}[ind];
-  if(it==="高い"&&ind==="IT・ソフトウェア")fit+=8; if(it==="低い")fit-=6; fit=clamp(fit,35,97);
+  const grow={"IT・ソフトウェア":94,"通信・キャリア":82,"メーカー":74,"金融":77,"小売・販売":60,"その他":68}[ind];
+  let fit={"IT・ソフトウェア":78,"通信・キャリア":90,"メーカー":68,"金融":62,"小売・販売":92,"その他":68}[ind];
+  if(it==="高い"&&ind==="IT・ソフトウェア")fit+=8; if(it==="高い")fit+=6; if(it==="低い")fit-=6; fit=clamp(fit,35,97);
   let pay, payCmt;
   if(state.estSalary){ pay=clamp(50+(state.estSalary-400)*0.15,30,98); payCmt=`入社時の想定年収 約${state.estSalary}万円 と現年収 約400万 の比較。`; }
   else { pay=clamp({"〜350万":36,"350〜450万":55,"450〜600万":78,"600万〜":92}[sal]); payCmt=`想定年収${sal}と現年収400万の比較。`; }
   let path=Math.round((grow+(cul==="成長重視"?86:cul==="バランス"?72:60))/2); if(it==="高い")path+=6; path=clamp(path,35,98);
-  const base={"大企業":88,"中堅":76,"中小・ベンチャー":62}[sc]; let stab=base+(cul==="安定重視"?8:cul==="成長重視"?-4:0); stab=clamp(stab,35,97);
+  const base={"大企業":90,"中堅":78,"中小・ベンチャー":64}[sc]; let stab=base+(cul==="安定重視"?8:cul==="成長重視"?-4:0); stab=clamp(stab,35,97);
   const bd=[
     {factor:"業界成長性",score:clamp(grow),comment:`${ind}の将来性。AI・IT志向のあなたとの方向性。`},
     {factor:"スキル適合(販売8年/IT志向)",score:fit,comment:"対面販売8年の実績と、IT転職志向・個人開発力の活かしやすさ。"},
